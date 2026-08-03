@@ -1,0 +1,1039 @@
+/* --- 基礎設定 --- */
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: sans-serif;
+            overflow: hidden;
+            background: #222;
+        }
+
+        /* --- 🔒 密碼驗證層 --- */
+        #auth-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            color: #00FFFF;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        #auth-container {
+            text-align: center;
+            padding: 40px;
+            border: 2px solid #00FFFF;
+            border-radius: 15px;
+            background: #1a1a1a;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+        }
+
+        #password-input {
+            padding: 12px;
+            font-size: 1.2em;
+            border: 1px solid #00FFFF;
+            border-radius: 5px;
+            background: #333;
+            color: #fff;
+            margin-bottom: 20px;
+            outline: none;
+            width: 220px;
+            text-align: center;
+        }
+
+        #login-btn {
+            padding: 12px 40px;
+            font-size: 1.2em;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* 地圖容器 (高度配合控制板調整) */
+        #map {
+            height: 100vh;
+            width: 100%;
+            z-index: 1;
+        }
+
+        /* --- 控制面板 (高度縮減為 140px) --- */
+        /* --- 控制面板 (高度調整以容納新功能) --- */
+        #controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: auto;
+            max-height: 50vh;
+            overflow-y: auto;
+            background: #1a1a1a;
+            color: white;
+            border-top: 2px solid #00FFFF;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            /* 改用 gap 控制間距 */
+            padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+            box-sizing: border-box;
+            z-index: 1000;
+        }
+
+        /* 通用列樣式 */
+        .control-row {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            width: 100%;
+            height: 32px;
+        }
+
+        /* 輸入框組 */
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85em;
+        }
+
+        input[type="number"] {
+            padding: 2px;
+            background: #444;
+            color: white;
+            border: 1px solid #666;
+            border-radius: 4px;
+            width: 45px;
+            text-align: center;
+        }
+
+        /* MSA 控制項 (樣式統一) */
+        .msa-control {
+            background: #300;
+            padding: 0 5px;
+            border-radius: 4px;
+            border: 1px dashed #FF4444;
+            display: flex;
+            align-items: center;
+            height: 100%;
+        }
+
+        /* [修改] NVG 戰術面板 (緊湊化) */
+        .nvg-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            height: 100%;
+            background: #002222;
+            border: 1px solid #007777;
+            border-radius: 4px;
+            padding: 0 5px;
+            overflow: hidden;
+            /* 防止溢出 */
+        }
+
+        /* 滑桿區塊 */
+        .time-slider-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex: 1;
+            /* 佔據左半邊 */
+            min-width: 120px;
+        }
+
+        input[type=range] {
+            flex-grow: 1;
+            height: 4px;
+            accent-color: #00FFFF;
+            cursor: pointer;
+        }
+
+        .sim-time-text {
+            color: #00FFFF;
+            font-family: monospace;
+            font-size: 0.9em;
+            font-weight: bold;
+            width: 85px;
+            text-align: right;
+        }
+
+        /* 數據顯示區塊 (右半邊) */
+        .nvg-info {
+            display: flex;
+            gap: 8px;
+            font-size: 0.75em;
+            color: #ccc;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .nvg-val {
+            color: #FFFF00;
+            font-weight: bold;
+        }
+
+        .nvg-alert {
+            color: #FF0000 !important;
+            animation: blink 1s infinite;
+            font-weight: bold;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        /* 底部按鈕區 */
+        .summary-container {
+            display: flex;
+            gap: 5px;
+            flex-grow: 1;
+            height: 100%;
+        }
+
+        .summary-box {
+            flex: 1;
+            font-weight: bold;
+            color: #00FFFF;
+            background: #333;
+            border-radius: 4px;
+            border: 1px solid #444;
+            font-size: 0.7em;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+        }
+
+        .summary-box span {
+            color: #FFFF00;
+            font-size: 1.1em;
+            margin-left: 2px;
+        }
+
+        .btn {
+            padding: 0 12px;
+            height: 100%;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+        }
+
+        .btn-delete {
+            background-color: #dc3545;
+        }
+
+        .btn-export {
+            background-color: #28a745;
+        }
+
+        /* --- 地圖元件樣式 --- */
+        .missile-icon {
+            font-size: 2.5em;
+            /* 調整飛彈圖示大小 */
+            text-shadow: 2px 2px 5px black;
+        }
+
+        #radar-legend {
+            position: fixed;
+            bottom: 220px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px;
+            border-radius: 5px;
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+            z-index: 1000;
+            border: 1px solid #00FFFF;
+            color: white;
+            font-size: 0.75em;
+            width: 80px;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* --- 雷達播放器控制項 --- */
+        #radar-player-ctrl {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 10, 10, 0.95);
+            border: 2px solid #00FFFF;
+            border-radius: 20px;
+            padding: 5px 20px;
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 3000;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+            min-width: 350px;
+        }
+
+        .player-btn {
+            background: none;
+            border: 1px solid #00FFFF;
+            color: #00FFFF;
+            border-radius: 4px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.2em;
+        }
+
+        .player-btn:hover {
+            background: #00FFFF;
+            color: #000;
+        }
+
+        #radar-slider {
+            flex-grow: 1;
+            height: 6px;
+            accent-color: #00FFFF;
+            cursor: pointer;
+        }
+
+        #current-radar-time {
+            color: #FFFF00;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 0.95em;
+            width: 50px;
+            text-align: center;
+        }
+
+        /* 替換為針對 Pane 的 CSS 來解決 Leaflet 圖層隔離導致的 mix-blend-mode 失效問題 */
+        .radar-blend-pane {
+            mix-blend-mode: multiply;
+            opacity: 0.8;
+            filter: brightness(1.5) contrast(2);
+            pointer-events: none;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .color-box {
+            width: 15px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        #loading-indicator {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 0, 255, 0.8);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            display: none;
+            z-index: 2000;
+        }
+
+        /* 月亮方位指標 */
+        .moon-arrow {
+            font-size: 30px;
+            color: #86dd9c;
+            text-shadow: 0 0 5px #030303;
+            opacity: 0.8;
+            transform-origin: center center;
+            display: block;
+            text-align: center;
+            line-height: 1;
+        }
+
+        .leaflet-control-layers-toggle {
+            width: 44px !important;
+            height: 44px !important;
+        }
+
+        /* --- 限制空域面板 (子選項清單) --- */
+        #restricted-area-panel {
+            position: fixed;
+            top: 60px;
+            left: 10px;
+            width: 230px;
+            max-height: 55vh;
+            background: rgba(8, 14, 22, 0.92);
+            border: 1px solid #0080FF;
+            border-radius: 6px;
+            box-shadow: 0 0 12px rgba(0, 128, 255, 0.35);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #restricted-area-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            border-bottom: 1px solid #0080FF;
+            color: #3399FF;
+            font-weight: bold;
+            font-size: 0.85em;
+            flex-shrink: 0;
+        }
+
+        .restricted-area-panel-actions {
+            display: flex;
+            align-items: center;
+        }
+
+        .restricted-area-panel-actions a {
+            color: #00FFFF;
+            font-size: 0.85em;
+            font-weight: normal;
+            text-decoration: none;
+            margin-left: 8px;
+            cursor: pointer;
+        }
+
+        .restricted-area-panel-actions a:hover {
+            text-decoration: underline;
+        }
+
+        #restricted-area-panel-close {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 1em;
+            cursor: pointer;
+            margin-left: 10px;
+            line-height: 1;
+        }
+
+        #restricted-area-panel-close:hover {
+            color: #fff;
+        }
+
+        #restricted-area-list {
+            overflow-y: auto;
+            padding: 4px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        #restricted-area-list::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        #restricted-area-list::-webkit-scrollbar-thumb {
+            background: #0066cc66;
+            border-radius: 3px;
+        }
+
+        .restricted-area-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            font-size: 0.78em;
+            color: #ddd;
+            line-height: 1.3;
+            padding: 2px 0;
+            border-bottom: 1px dashed #16283a;
+        }
+
+        .restricted-area-row input[type="checkbox"] {
+            accent-color: #0080FF;
+            margin-top: 2px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .restricted-area-row label {
+            cursor: pointer;
+        }
+
+        .restricted-area-row .ra-name {
+            color: #99ccff;
+            font-weight: bold;
+        }
+
+        .restricted-area-row .ra-alt {
+            color: #aaa;
+        }
+
+        /* 限制空域圖形上的名稱/高度標籤 */
+        .leaflet-tooltip.restricted-area-label {
+            background: rgba(0, 10, 25, 0.75) !important;
+            border: 1px solid #0080FF !important;
+            color: #99ccff !important;
+            font-size: 0.75em;
+            font-weight: bold;
+            white-space: nowrap !important;
+            box-shadow: none;
+        }
+
+        /* [修正] 強制透明標籤 (移除預設白色背景) */
+        .leaflet-tooltip.big-label {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            font-size: 1.8em;
+            /* [可調整] 航點資訊字體大小 (原本 2.5em) */
+            font-weight: bold;
+            color: #00FFFF !important;
+            text-shadow: 3px 3px 4px #000, -2px -2px 3px #000;
+            /* 強陰影增加可讀性 */
+            line-height: 1.1;
+            white-space: nowrap !important;
+        }
+
+        /* 航段中間的小標籤也透明 */
+        .leaflet-tooltip.segment-label,
+        .leaflet-marker-icon.segment-label {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            font-size: 1.5em;
+            color: #FFFF00 !important;
+            text-shadow: 2px 2px 2px #000;
+            white-space: nowrap !important;
+        }
+
+        .aip-label {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00FFFF;
+            color: #00FFFF;
+            font-weight: bold;
+            padding: 2px 5px;
+        }
+
+        .aip-icon {
+            font-size: 1.5em;
+            text-shadow: 2px 2px 2px #000;
+        }
+
+        @media (max-width: 768px) {
+            .big-label {
+                font-size: 1.5em !important;
+            }
+
+            /* [可調整] 手機版航點字體大小 */
+            #controls {
+                height: auto;
+            }
+
+            #map {
+                height: 100vh;
+            }
+
+            #controls {
+                height: auto;
+            }
+
+            #map {
+                height: 100vh;
+            }
+
+            .nvg-row {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 4px;
+            }
+
+            /* 手機版拆成兩行 */
+            .time-slider-wrapper {
+                width: 100%;
+                margin-bottom: 2px;
+            }
+
+            .nvg-info {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+
+        /* --- 新增：比例尺與縮放控制項排版 --- */
+        .leaflet-top.leaflet-right {
+            display: flex;
+            flex-direction: row-reverse;
+            /* 讓先加入的 Zoom 靠右，後加入的 Scale 靠左 */
+            align-items: flex-start;
+            gap: 10px;
+            margin-top: 10px;
+            margin-right: 10px;
+        }
+
+        .leaflet-top.leaflet-right .leaflet-control {
+            margin: 0 !important;
+        }
+
+        .leaflet-control-scale-line {
+            background: transparent;
+            border: 1px solid #00FFFF;
+            border-top: none;
+            color: #00FFFF;
+            font-weight: bold;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        .leaflet-control-scale-line::before {
+            content: "比例尺 ";
+        }
+
+        /* --- 新增：防拷貝/防選取 --- */
+        body {
+            -webkit-user-select: none;
+            /* Safari, Chrome */
+            -moz-user-select: none;
+            /* Firefox */
+            -ms-user-select: none;
+            /* IE/Edge */
+            user-select: none;
+            /* 標準語法 */
+        }
+
+        /* 允許在輸入框和可編輯內容中選取文字 */
+        input,
+        textarea,
+        [contenteditable="true"] {
+            -webkit-user-select: auto;
+            -moz-user-select: auto;
+            -ms-user-select: auto;
+            user-select: auto;
+        }
+
+        /* --- AI 分析 Modal --- */
+        #ai-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 9000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+
+        #ai-modal-overlay.active {
+            display: flex;
+        }
+
+        #ai-modal {
+            background: #0d1117;
+            border: 1px solid #00FFFF;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 680px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.25);
+            overflow: hidden;
+            animation: modalIn 0.3s ease;
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        #ai-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            border-bottom: 1px solid #1e3a3a;
+            background: linear-gradient(90deg, #00151a, #001f2e);
+            flex-shrink: 0;
+        }
+
+        #ai-modal-header h2 {
+            margin: 0;
+            font-size: 1em;
+            color: #00FFFF;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #ai-modal-close {
+            background: none;
+            border: 1px solid #555;
+            color: #aaa;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            font-size: 1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        #ai-modal-close:hover {
+            background: #dc3545;
+            border-color: #dc3545;
+            color: #fff;
+        }
+
+        #ai-modal-api-row {
+            display: flex;
+            gap: 8px;
+            padding: 10px 16px;
+            border-bottom: 1px solid #1e3a3a;
+            background: #0a0f14;
+            flex-shrink: 0;
+            align-items: center;
+        }
+
+        #ai-api-key-input {
+            flex: 1;
+            padding: 7px 10px;
+            background: #1a1a2e;
+            border: 1px solid #2a4a5a;
+            border-radius: 6px;
+            color: #ccc;
+            font-size: 0.82em;
+            font-family: monospace;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #ai-api-key-input:focus {
+            border-color: #00FFFF;
+        }
+
+        #ai-analyze-btn {
+            padding: 7px 18px;
+            background: linear-gradient(135deg, #007a7a, #005f5f);
+            border: 1px solid #00FFFF;
+            color: #00FFFF;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85em;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        #ai-analyze-btn:hover {
+            background: #00FFFF;
+            color: #000;
+        }
+
+        #ai-analyze-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #ai-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            font-size: 0.88em;
+            line-height: 1.7;
+            color: #d0d0d0;
+        }
+
+        #ai-modal-body::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        #ai-modal-body::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+
+        #ai-modal-body::-webkit-scrollbar-thumb {
+            background: #00777766;
+            border-radius: 3px;
+        }
+
+        .ai-plan-summary {
+            background: #0a1a20;
+            border: 1px solid #1e3a4a;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            font-size: 0.85em;
+            color: #8ac;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            text-align: center;
+        }
+
+        .ai-plan-summary .si-val {
+            color: #FFFF00;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .ai-plan-summary .si-lbl {
+            color: #aaa;
+            font-size: 0.8em;
+        }
+
+        .ai-result-content h3 {
+            color: #00FFFF;
+            border-bottom: 1px solid #1e3a3a;
+            padding-bottom: 4px;
+            margin: 14px 0 6px;
+            font-size: 0.95em;
+        }
+
+        .ai-result-content p {
+            margin: 4px 0 8px;
+        }
+
+        .ai-result-content ul {
+            margin: 4px 0 8px;
+            padding-left: 18px;
+        }
+
+        .ai-result-content li {
+            margin-bottom: 4px;
+        }
+
+        .ai-result-content strong {
+            color: #FFFF00;
+        }
+
+        .ai-result-content .warn {
+            color: #FF6666;
+            font-weight: bold;
+        }
+
+        .ai-result-content .ok {
+            color: #66FF88;
+        }
+
+        #ai-loading {
+            display: none;
+            text-align: center;
+            padding: 30px 0;
+            color: #00FFFF;
+        }
+
+        .ai-spinner {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            border: 3px solid #003333;
+            border-top-color: #00FFFF;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #ai-placeholder {
+            text-align: center;
+            color: #445;
+            padding: 30px 0;
+            font-size: 0.9em;
+        }
+
+        #ai-placeholder .ai-icon-big {
+            font-size: 3em;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        #ai-save-key-label {
+            font-size: 0.78em;
+            color: #567;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        #ai-save-key-label input {
+            cursor: pointer;
+            accent-color: #00FFFF;
+        }
+
+        #plan-panel {
+            position: fixed;
+            top: 0;
+            right: -100%;
+            width: 650px;
+            max-width: 100vw;
+            height: 100vh;
+            background: #1a1a1a;
+            border-left: 2px solid #00FFFF;
+            color: white;
+            z-index: 9999;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -5px 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        #plan-panel.active {
+            right: 0;
+        }
+
+        #plan-panel-header {
+            padding: 15px;
+            background: linear-gradient(90deg, #003f3f, #001f2e);
+            border-bottom: 1px solid #00FFFF;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #plan-panel-header h2 {
+            margin: 0;
+            font-size: 1.2em;
+            color: #00FFFF;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #plan-panel-close {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+
+        #plan-panel-close:hover {
+            color: #fff;
+        }
+
+        #plan-panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .plan-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+            color: #ddd;
+        }
+
+        .plan-table th,
+        .plan-table td {
+            border: 1px solid #444;
+            padding: 6px;
+            text-align: center;
+        }
+
+        .plan-table th {
+            background: #222;
+            color: #00FFFF;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        .plan-table input {
+            background: #111;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 4px;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            border-radius: 3px;
+        }
+
+        .plan-table input:focus {
+            border-color: #00FFFF;
+            outline: none;
+        }
+
+        .stepper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .stepper button {
+            background: #333;
+            color: #00FFFF;
+            border: 1px solid #555;
+            padding: 2px 6px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: bold;
+            flex-shrink: 0;
+            border-radius: 3px;
+        }
+
+        .stepper button:hover {
+            background: #444;
+        }
+
+        .stepper input {
+            min-width: 35px;
+            margin: 0 4px;
+            -moz-appearance: textfield;
+        }
+
+        .stepper input::-webkit-outer-spin-button,
+        .stepper input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        #plan-panel-footer {
+            padding: 15px;
+            border-top: 1px solid #333;
+            text-align: center;
+        }
+
+        #btn-confirm-plan, #export-btn {
+            background: #00FFFF;
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        #btn-confirm-plan:hover, #export-btn:hover {
+            background: #00cccc;
+        }

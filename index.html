@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <title>航空計畫工具 - 介面精修版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="./css/style.css" />
+</head>
+
+<body>
+
+
+
+    <div id="radar-player-ctrl">
+        <button class="player-btn" id="radar-prev" title="前一幀">⏮</button>
+        <button class="player-btn" id="radar-play" title="播放/暫停">▶</button>
+        <button class="player-btn" id="radar-next" title="後一幀">⏭</button>
+        <input type="range" id="radar-slider" min="0" max="12" value="12">
+        <span id="current-radar-time">--:--</span>
+    </div>
+    <div id="loading-indicator">⚡ 下載電纜資料中...</div>
+    <div id="calc-indicator"
+        style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: #00FFFF; padding: 20px; border: 2px solid #00FFFF; border-radius: 10px; display: none; z-index: 3000; font-weight: bold;">
+        📡 計算雷達視域中...</div>
+    <div id="msa-legend"
+        style="position: fixed; bottom: 180px; right: 10px; background: rgba(0, 0, 0, 0.6); padding: 5px; border-radius: 5px; display: none; flex-direction: column; gap: 5px; z-index: 1000; border: 1px solid #00FFFF;">
+        <span
+            style="background: rgba(255, 0, 0, 0.6); color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em;">警告</span>
+        <span
+            style="background: rgba(255, 255, 0, 0.6); color: #000; padding: 2px 6px; border-radius: 3px; font-size: 0.8em;">注意</span>
+    </div>
+    <div id="radar-legend">
+        <div
+            style="text-align: center; font-weight: bold; color: #00FFFF; margin-bottom: 5px; border-bottom: 1px solid #00FFFF; padding-bottom: 2px;">
+            回波 (dBZ)</div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #9000A0;"></div><span>> 65</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #D000D0;"></div><span>60 - 65</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #FF00FF;"></div><span>55 - 60</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #C00000;"></div><span>50 - 55</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #FF0000;"></div><span>45 - 50</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #FF9000;"></div><span>40 - 45</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #FFD000;"></div><span>35 - 40</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #FEFF00;"></div><span>30 - 35</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #009000;"></div><span>25 - 30</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #00D000;"></div><span>20 - 25</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #00FF00;"></div><span>15 - 20</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #0000D0;"></div><span>10 - 15</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #0000FF;"></div><span>5 - 10</span>
+        </div>
+        <div class="legend-row">
+            <div class="color-box" style="background: #00FFFF;"></div><span> < 5</span>
+        </div>
+    </div>
+    <div id="restricted-area-panel">
+        <div id="restricted-area-panel-header">
+            <span>🚧 限制空域</span>
+            <span class="restricted-area-panel-actions">
+                <a href="#" id="restricted-select-all">全選</a>
+                <a href="#" id="restricted-select-none">全不選</a>
+                <button id="restricted-area-panel-close" title="關閉">✕</button>
+            </span>
+        </div>
+        <div id="restricted-area-list"></div>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="controls">
+        <div class="control-row">
+            <button id="delete-btn" class="btn btn-delete" style="margin-left: auto;">DEL</button>
+            <button id="export-gpx-btn" class="btn btn-export" style="background:linear-gradient(135deg,#005f00,#003f00); border: 1px solid #00FF00; color:#00FF00;" title="匯出 GPX">3D PVW</button>
+            <button id="plan-btn" class="btn"
+                style="background: linear-gradient(135deg,#005f5f,#003f3f); border: 1px solid #00FFFF; color:#00FFFF;">📋
+                PLAN</button>
+            <button id="ai-btn" class="btn"
+                style="background: linear-gradient(135deg,#005f5f,#003f3f); border: 1px solid #00FFFF; color:#00FFFF;">🤖
+                AI</button>
+        </div>
+
+        <!-- MSA 控制項 (預設隱藏) -->
+        <div id="ctrl-msa" class="control-row" style="display: none;">
+            <div class="msa-control" style="width: 100%; gap: 5px;">
+                <label style="color: #86d10e; font-weight:bold; font-size:0.9em;">飛行高度:</label>
+                <div class="input-group">
+                    <button class="btn" style="padding: 0 8px; background: #555; font-size: 1.2em;"
+                        onclick="adjustMsaHeight(-50)">-</button>
+                    <div style="position: relative; display: inline-block;">
+                        <input type="number" id="msaHeight" value="2000" step="100" onchange="updateMsaLayer()"
+                            style="width: 45px; padding-right: 15px; text-align: right;">
+                        <span
+                            style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); font-size: 0.8em; pointer-events: none; color: #ccc;">呎</span>
+                    </div>
+                    <button class="btn" style="padding: 0 8px; background: #555; font-size: 1.2em;"
+                        onclick="adjustMsaHeight(50)">+</button>
+                </div>
+                <label style="color: #86d10e; font-weight:bold; font-size:0.9em;">注意範圍:</label>
+                <div class="input-group">
+                    <button class="btn" style="padding: 0 8px; background: #555; font-size: 1.2em;"
+                        onclick="adjustMsaWarning(-50)">-</button>
+                    <div style="position: relative; display: inline-block;">
+                        <input type="number" id="msaWarningOffset" value="500" step="100" onchange="updateMsaLayer()"
+                            style="width: 45px; padding-right: 15px; text-align: right;">
+                        <span
+                            style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); font-size: 0.8em; pointer-events: none; color: #ccc;">呎</span>
+                    </div>
+                    <button class="btn" style="padding: 0 8px; background: #555; font-size: 1.2em;"
+                        onclick="adjustMsaWarning(50)">+</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新增：防空飛彈控制列 -->
+        <div id="ctrl-missile" class="control-row" style="display: none;">
+            <button id="btn-missile" class="btn"
+                style="background-color: #ec080898; color: white; text-shadow: 1px 1px 2px black;">🚀 部署</button>
+            <div class="input-group">
+                <button class="btn" style="padding: 0 8px; background: #555; font-size: 1.2em;"
+                    onclick="adjustRange(-1)">-</button>
+                <div style="position: relative; display: inline-block;">
+                    <input type="number" id="missile-range" value="20"
+                        style="width: 60px; padding-right: 20px; text-align: right;">
+                    <span
+                        style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.9em; pointer-events: none; color: #ccc;">浬</span>
+                </div>
+                <button class="btn" style="padding: 0 8px; background: #555; font-size: 1.2em;"
+                    onclick="adjustRange(1)">+</button>
+            </div>
+            <div class="input-group">
+                <button class="btn" style="padding: 0 8px; background: #555; font-size: 1.2em;"
+                    onclick="adjustAlt(-50)">-</button>
+                <div style="position: relative; display: inline-block;">
+                    <input type="number" id="missile-alt" value="500" title="目標航空器之絕對高度(MSL)"
+                        style="width: 60px; padding-right: 20px; text-align: right;">
+                    <span
+                        style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.9em; pointer-events: none; color: #ccc;">呎</span>
+                </div>
+                <button class="btn" style="padding: 0 8px; background: #555; font-size: 1.2em;"
+                    onclick="adjustAlt(50)">+</button>
+            </div>
+        </div>
+
+        <div id="ctrl-nvg" class="control-row" style="height: auto; min-height: 32px; display: none;">
+            <div class="nvg-row">
+                <div class="time-slider-wrapper">
+                    <span style="font-size:0.8em; color:#00FFFF;">陰影區 時間</span>
+                    <input type="range" id="simTimeSlider" min="0" max="720" value="0" oninput="updateMoonInfo()">
+                    <span id="simTimeDisplay" class="sim-time-text">--:--</span>
+                </div>
+                <div class="nvg-info">
+                    <span>月光照度:<span id="moonIllum" class="nvg-val">--%</span></span>
+                    <span>月亮方位:<span id="moonAzimuth" class="nvg-val">--°</span></span>
+                    <span>月亮仰角:<span id="moonAlt" class="nvg-val">--°</span></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-row">
+            <div class="summary-container">
+                <div class="summary-box">總航程 <span id="totalDistance">0.0</span></div>
+                <div class="summary-box">總航時 <span id="totalTime">00:00</span></div>
+                <div class="summary-box">總油耗 <span id="totalFuel">0.0</span></div>
+            </div>
+        </div>
+    </div>
+
+    
+
+    <!-- 計畫側邊欄 -->
+    <div id="plan-panel">
+        <div id="plan-panel-header">
+            <h2>📋 詳細航路計畫</h2>
+            <button id="plan-panel-close">✕</button>
+        </div>
+        <div id="plan-panel-body">
+            <!-- 動態生成航點設定 -->
+        </div>
+        <div id="plan-panel-footer" style="display: flex; gap: 10px;">
+            <button id="export-btn" style="flex: 1;" title="匯出 CSV">匯出CSV</button>
+            <button id="btn-confirm-plan" style="flex: 1;">確認</button>
+        </div>
+    </div>
+
+    <!-- AI 分析 Modal -->
+    <div id="ai-modal-overlay">
+        <div id="ai-modal">
+            <div id="ai-modal-header">
+                <h2>🤖 AI 航空計畫分析 <span style="font-size:0.75em;color:#567;font-weight:normal;">by Groq</span></h2>
+                <button id="ai-modal-close" title="關閉">✕</button>
+            </div>
+            <div id="ai-modal-api-row">
+                <input type="password" id="ai-api-key-input"
+                    placeholder="輸入 Groq API Key（可至 console.groq.com 免費申請）">
+                <label id="ai-save-key-label"><input type="checkbox" id="ai-save-key-cb"> 記住</label>
+            </div>
+            <div
+                style="padding: 8px 16px; display: flex; justify-content: center; border-bottom: 1px solid #1e3a3a; background: #0a0f14;">
+                <button id="ai-analyze-btn" style="width: 100%;">▶ 開始分析</button>
+            </div>
+            <div id="ai-modal-body">
+                <div id="ai-placeholder">
+                    <span class="ai-icon-big">✈️</span>
+                    輸入 API Key 後點擊「開始分析」<br>AI 將為您的航空計畫提供安全建議
+                </div>
+                <div id="ai-loading">
+                    <div class="ai-spinner"></div><br>AI 分析中，請稍候...
+                </div>
+                <div id="ai-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+    <script src="./js/restricted_areas_data.js"></script>
+    <script src="./js/config.js"></script>
+<script defer src="./js/main.js"></script>
+</body>
+
+</html>

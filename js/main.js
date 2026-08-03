@@ -1,0 +1,1970 @@
+// --- 新增：禁用右鍵選單 ---
+        document.addEventListener('contextmenu', event => event.preventDefault());
+
+        // --- 1. 初始化與驗證 ---
+        const loginBtn = document.getElementById('login-btn');
+        const passInput = document.getElementById('password-input');
+        const overlay = document.getElementById('auth-overlay');
+
+        function checkPassword() {
+            if (passInput && passInput.value === APP_CONFIG.LOGIN_PASSWORD) {
+                if (overlay) overlay.style.display = 'none';
+                map.invalidateSize();
+                initRadar();
+                initMoonCalc();
+            } else {
+                alert("密碼錯誤！");
+            }
+        }
+
+        if (loginBtn && passInput) {
+            loginBtn.addEventListener('click', checkPassword);
+            passInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkPassword(); });
+        } else {
+            // 沒有登入驗證畫面，直接初始化
+            setTimeout(() => {
+                if (typeof map !== 'undefined' && map.invalidateSize) map.invalidateSize();
+                if (typeof initRadar === 'function') initRadar();
+                if (typeof initMoonCalc === 'function') initMoonCalc();
+            }, 100);
+        }
+
+        // --- 瀏覽次數統計 (伺服器版) ---
+        const visitDisplay = document.getElementById('visit-count');
+        const namespace = 'amps-planner-steven'; // 專案識別名稱
+        const key = 'visits';
+
+        if (visitDisplay) { visitDisplay.innerText = "讀取伺服器數據..."; }
+
+        if (!sessionStorage.getItem('has_counted')) {
+            // 新 Session：呼叫 API 增加數值 (/up)
+            fetch(`https://api.counterapi.dev/v1/${namespace}/${key}/up`)
+                .then(res => res.json())
+                .then(data => {
+                    if (visitDisplay) if (visitDisplay) visitDisplay.innerText = "累積瀏覽次數: " + data.count;
+                    sessionStorage.setItem('has_counted', 'true');
+                })
+                .catch(() => { if (visitDisplay) visitDisplay.innerText = "無法連接計數伺服器"; });
+        } else {
+            // 同 Session：僅讀取數值
+            fetch(`https://api.counterapi.dev/v1/${namespace}/${key}`)
+                .then(res => res.json())
+                .then(data => {
+                    visitDisplay.innerText = "累積瀏覽次數: " + data.count;
+                })
+                .catch(() => { if (visitDisplay) visitDisplay.innerText = "無法連接計數伺服器"; });
+        }
+
+        // --- 2. 地圖圖層 (完整) ---
+        const satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20 });
+        const osm = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20 });
+        const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 });
+        const night = L.tileLayer('https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_Black_Marble/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png', { maxZoom: 20, maxNativeZoom: 8 });
+
+        const map = L.map('map', { zoomControl: false, layers: [satellite] }).setView([23.6, 120.9], 8);
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        L.control.scale({ position: 'topright', maxWidth: 150, metric: true, imperial: false }).addTo(map);
+
+        // 強制立即建立 SVG 渲染器，讓限制空域的綠色網格 <pattern> 一開始就能掛進 SVG <defs>
+        L.svg({ padding: 0.5 }).addTo(map);
+        function ensureRestrictedGridPattern() {
+            const svg = map.getPane('overlayPane') && map.getPane('overlayPane').querySelector('svg');
+            if (!svg) return;
+            let defs = svg.querySelector('defs');
+            if (!defs) {
+                defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                svg.insertBefore(defs, svg.firstChild);
+            }
+            if (defs.querySelector('#restrictedGridPattern')) return;
+            const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+            pattern.setAttribute('id', 'restrictedGridPattern');
+            pattern.setAttribute('width', '10');
+            pattern.setAttribute('height', '10');
+            pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M0,0 L10,0 M0,0 L0,10');
+            path.setAttribute('stroke', '#0080FF');
+            path.setAttribute('stroke-width', '1');
+            pattern.appendChild(path);
+            defs.appendChild(pattern);
+        }
+        ensureRestrictedGridPattern();
+
+        // --- 3. NVG 月相與照度計算 ---
+        let moonMarker = null;
+        let moonShadowLayer = null;
+        const nightShadowGroup = L.layerGroup(); // 建立陰影圖層群組
+        let nightTimeMap = []; // 用於儲存滑桿值到實際日期物件的映射
+
+        // 新增：初始化時間滑桿的函式
+        function initializeTimeSlider() {
+            const slider = document.getElementById('simTimeSlider');
+            const center = map.getCenter();
+            const now = new Date();
+            const limit = new Date(now.getTime() + 48 * 3600 * 1000);
+            nightTimeMap = [];
+
+            // 迭代檢查從昨天到後天的時間，以捕捉所有相關的夜間時段
+            for (let i = -1; i < 3; i++) {
+                const currentDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+                const nextDay = new Date(currentDay.getTime() + 24 * 3600 * 1000);
+
+                const sunTimesCurrent = SunCalc.getTimes(currentDay, center.lat, center.lng);
+                const sunTimesNext = SunCalc.getTimes(nextDay, center.lat, center.lng);
+
+                // 使用民用薄暮 (dusk) 作為夜晚開始時間
+                const nightStart = sunTimesCurrent.dusk;
+                const nightEnd = sunTimesNext.sunrise;
+
+                // 逐分鐘遍歷這個夜間時段
+                for (let t = nightStart.getTime(); t < nightEnd.getTime(); t += 60000) {
+                    // 僅當時間在 "現在" 和 "48小時後" 的範圍內時才加入列表
+                    if (t >= now.getTime() && t < limit.getTime()) {
+                        nightTimeMap.push(new Date(t));
+                    }
+                }
+            }
+
+            // 為確保萬一，過濾重複項並排序
+            nightTimeMap = nightTimeMap.filter((date, index, self) =>
+                index === self.findIndex((d) => d.getTime() === date.getTime())
+            );
+            nightTimeMap.sort((a, b) => a - b);
+
+            if (nightTimeMap.length > 0) {
+                slider.min = 0;
+                slider.max = nightTimeMap.length > 0 ? nightTimeMap.length - 1 : 0;
+                slider.value = 0;
+            } else {
+                slider.min = 0;
+                slider.max = 0;
+                slider.value = 0;
+            }
+        }
+
+        function initMoonCalc() {
+            initializeTimeSlider();
+            updateMoonInfo();
+            map.on('moveend', () => {
+                // 地圖移動時，緯度變更會影響太陽時間，需重新計算滑桿
+                const slider = document.getElementById('simTimeSlider');
+                const currentValue = parseInt(slider.value) || 0;
+                const currentTime = nightTimeMap[currentValue]; // 重新計算前獲取實際時間
+
+                initializeTimeSlider(); // 重建 nightTimeMap
+
+                // 在新地圖中找到最接近之前時間的索引
+                let newIndex = 0;
+                if (currentTime && nightTimeMap.length > 0) {
+                    let minDiff = Infinity;
+                    for (let i = 0; i < nightTimeMap.length; i++) {
+                        const diff = Math.abs(nightTimeMap[i].getTime() - currentTime.getTime());
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            newIndex = i;
+                        }
+                    }
+                }
+                slider.value = newIndex;
+                updateMoonInfo(); // 更新顯示
+            });
+        }
+
+        function updateMoonInfo() {
+            const sliderValue = parseInt(document.getElementById('simTimeSlider').value) || 0;
+
+            if (nightTimeMap.length === 0) {
+                document.getElementById('simTimeDisplay').innerText = `無夜間時段`;
+                document.getElementById('moonIllum').innerText = "--%";
+                document.getElementById('moonAzimuth').innerText = "--°";
+                document.getElementById('moonAlt').innerText = "--°";
+                nightShadowGroup.clearLayers();
+                if (moonMarker) map.removeLayer(moonMarker);
+                return;
+            }
+
+            const index = Math.max(0, Math.min(sliderValue, nightTimeMap.length - 1));
+            const simDate = nightTimeMap[index];
+
+            if (!simDate) { return; } // 安全檢查
+
+            const hours = String(simDate.getHours()).padStart(2, '0');
+            const minutes = String(simDate.getMinutes()).padStart(2, '0');
+            const dateStr = `${simDate.getMonth() + 1}/${simDate.getDate()}`;
+            document.getElementById('simTimeDisplay').innerText = `${dateStr} ${hours}:${minutes}`;
+
+            const center = map.getCenter();
+            const illumination = SunCalc.getMoonIllumination(simDate);
+            const position = SunCalc.getMoonPosition(simDate, center.lat, center.lng);
+
+            const illumPercent = Math.round(illumination.fraction * 100);
+            const azimuth = (position.azimuth * 180 / Math.PI + 180) % 360;
+            const altitude = position.altitude * 180 / Math.PI;
+
+            const illumEl = document.getElementById('moonIllum');
+            const altEl = document.getElementById('moonAlt');
+
+            illumEl.innerText = illumPercent + "%";
+            document.getElementById('moonAzimuth').innerText = Math.round(azimuth) + "°";
+            altEl.innerText = Math.round(altitude) + "°";
+
+            if (illumPercent < 20 || altitude < 0) {
+                illumEl.classList.add('nvg-alert');
+            } else {
+                illumEl.classList.remove('nvg-alert');
+            }
+
+            // --- 修改核心：月亮地形陰影圖層邏輯 (加入日夜判斷) ---
+            const sunTimes = SunCalc.getTimes(simDate, center.lat, center.lng);
+            // 定義夜間：目前時間早於日出 或 晚於終昏 (dusk)
+            const isNight = simDate < sunTimes.sunrise || simDate > sunTimes.dusk;
+            const isShadowActive = map.hasLayer(nightShadowGroup); // 檢查圖層是否開啟
+
+            // 清除舊狀態
+            if (moonMarker) map.removeLayer(moonMarker);
+
+            if (altitude < 0) {
+                altEl.style.color = '#FF4444';
+                altEl.innerText = "⬇無";
+                nightShadowGroup.clearLayers();
+            } else if (isNight && altitude >= 20 && isShadowActive) {
+                // 夜間 + 仰角夠高 + 圖層已開啟：顯示藍色地形陰影
+                altEl.style.color = '#00FF00';
+                updateMoonShadowLayer(azimuth, altitude);
+            } else {
+                // 其他情況：顯示箭頭指示方位 (並清除陰影)
+                altEl.style.color = '#FFFF00';
+                nightShadowGroup.clearLayers();
+                updateMoonArrow(center, azimuth, altitude);
+            }
+
+            updateMoonArrow(center, azimuth, altitude);
+        }
+
+        function updateMoonArrow(center, azimuth, altitude) {
+            if (moonMarker) map.removeLayer(moonMarker);
+            if (altitude < 0) return;
+
+            const arrowIcon = L.divIcon({
+                className: 'moon-arrow-wrap',
+                html: `<div class="moon-arrow" style="transform: rotate(${azimuth}deg);">⬆</div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+            moonMarker = L.marker(center, { icon: arrowIcon, interactive: false }).addTo(map);
+        }
+
+        // --- 新增：紫色地形陰影圖層 (類似 MSA 實作) ---
+        L.GridLayer.MoonShadow = L.GridLayer.extend({
+            createTile: function (coords) {
+                const tile = L.DomUtil.create('canvas', 'leaflet-tile');
+                const size = this.getTileSize();
+                tile.width = size.x; tile.height = size.y;
+                const ctx = tile.getContext('2d');
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${coords.z}/${coords.x}/${coords.y}.png`;
+
+                const az = this.options.azimuth || 0;
+                const alt = this.options.altitude || 45;
+
+                img.onload = function () {
+                    ctx.drawImage(img, 0, 0);
+                    const imgData = ctx.getImageData(0, 0, size.x, size.y);
+                    const data = imgData.data;
+                    const w = size.x;
+                    const maxOpacity = 190; // [設定] 藍色陰影最大不透明度 (0~255)，數值越小越透明
+
+                    // 計算光照向量 (假設 Canvas 座標: +X向右, +Y向下)
+                    // Azimuth 0=North(Up=-Y), 90=East(Right=+X)
+                    const radAz = (az * Math.PI) / 180;
+                    const radAlt = (alt * Math.PI) / 180;
+                    const Lx = Math.sin(radAz) * Math.cos(radAlt);
+                    const Ly = -Math.cos(radAz) * Math.cos(radAlt);
+                    const Lz = Math.sin(radAlt);
+
+                    for (let i = 0; i < data.length; i += 4) {
+                        // 簡易法向量計算 (利用相鄰像素，忽略邊界誤差以求效能)
+                        const idx = i / 4;
+                        const x = idx % w; const y = Math.floor(idx / w);
+
+                        // 取得當前高度
+                        const h = (data[i] * 256 + data[i + 1] + data[i + 2] / 256) - 32768;
+
+                        // 取得右方與下方高度 (若邊界則重複當前高度)
+                        let hx = h, hy = h;
+                        if (x < w - 1) hx = (data[i + 4] * 256 + data[i + 5] + data[i + 6] / 256) - 32768;
+                        if (y < size.y - 1) {
+                            const ib = i + w * 4;
+                            hy = (data[ib] * 256 + data[ib + 1] + data[ib + 2] / 256) - 32768;
+                        }
+
+                        // 計算坡度向量與法向量
+                        const dzdx = (h - hx) * 2; // 2 為增強係數
+                        const dzdy = (h - hy) * 2;
+                        const len = Math.sqrt(dzdx * dzdx + dzdy * dzdy + 1);
+                        const Nx = dzdx / len; const Ny = dzdy / len; const Nz = 1 / len;
+
+                        // 光照強度 (Dot Product)
+                        let dot = Nx * Lx + Ny * Ly + Nz * Lz;
+
+                        // 著色邏輯：陰影區(dot小)顯示藍色，受光區(dot大)透明
+                        // 藍色 (0, 0, 255)
+                        data[i] = 0; data[i + 1] = 0; data[i + 2] = 255;
+
+                        // [修改] 嚴格定義陰影區：只有 dot < 0 (背光) 才顯示藍色，受光面完全透明
+                        if (dot >= 0) {
+                            data[i + 3] = 0;
+                        } else {
+                            data[i + 3] = Math.min(200, Math.abs(dot) * 255);
+                            data[i + 3] = Math.min(maxOpacity, Math.abs(dot) * 255);
+                        }
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                };
+                return tile;
+            }
+        });
+
+        function updateMoonShadowLayer(az, alt) {
+            if (!moonShadowLayer) {
+                moonShadowLayer = new L.GridLayer.MoonShadow({ zIndex: 40, opacity: 0.8 });
+            }
+            moonShadowLayer.options.azimuth = az;
+            moonShadowLayer.options.altitude = alt;
+            if (!nightShadowGroup.hasLayer(moonShadowLayer)) {
+                nightShadowGroup.addLayer(moonShadowLayer);
+            }
+            moonShadowLayer.redraw();
+        }
+
+        // --- 4. MSA 著色圖層 ---
+        let msaLayer = null;
+        L.GridLayer.MsaMask = L.GridLayer.extend({
+            createTile: function (coords) {
+                const tile = L.DomUtil.create('canvas', 'leaflet-tile');
+                const size = this.getTileSize();
+                tile.width = size.x; tile.height = size.y;
+                const ctx = tile.getContext('2d');
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${coords.z}/${coords.x}/${coords.y}.png`;
+                img.onload = function () {
+                    ctx.drawImage(img, 0, 0);
+                    const imgData = ctx.getImageData(0, 0, size.x, size.y);
+                    const data = imgData.data;
+                    const msaFt = parseFloat(document.getElementById('msaHeight').value) || 2000;
+                    const warningOffsetFt = parseFloat(document.getElementById('msaWarningOffset').value) || 500;
+                    const redLimit = msaFt / 3.28084;
+                    const yellowLimit = (msaFt - warningOffsetFt) / 3.28084;
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i]; const g = data[i + 1]; const b = data[i + 2];
+                        const h = (r * 256 + g + b / 256) - 32768;
+                        if (h > redLimit) {
+                            data[i] = 255; data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = 140;
+                        } else if (h > yellowLimit) {
+                            data[i] = 255; data[i + 1] = 255; data[i + 2] = 0; data[i + 3] = 120;
+                        } else {
+                            data[i + 3] = 0;
+                        }
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                };
+                return tile;
+            }
+        });
+        msaLayer = new L.GridLayer.MsaMask({ zIndex: 50, opacity: 0.8 });
+        function updateMsaLayer() { if (map.hasLayer(msaLayer)) msaLayer.redraw(); }
+
+        // --- 5. 電纜圖層 ---
+        const powerLayer = L.layerGroup();
+        let isPowerLayerActive = false;
+        let drawnPowerElementIds = new Set();
+        const missileLayer = L.layerGroup(); // 防空隱蔽圖層
+
+        // --- 限制空域 (ENR 5.1) ---
+        const restrictedAreaLayer = L.layerGroup(); // 根圖層：所有限制空域
+        const restrictedAreaSubLayers = {}; // id -> L.layerGroup (單一空域，供子選項個別開關)
+
+        function buildRestrictedAreaShape(area) {
+            const g = area.geometry || {};
+            const style = {
+                color: '#0080FF',
+                weight: 1.5,
+                opacity: 0.85,
+                fillColor: 'url(#restrictedGridPattern)',
+                fillOpacity: 0.9
+            };
+
+            if (area.geometry_type === 'circle' && g.center) {
+                const radiusNm = g.radius_nm != null ? g.radius_nm : (g.radius_m != null ? g.radius_m / 1852 : null);
+                if (radiusNm == null) return null;
+                return L.circle([g.center[1], g.center[0]], Object.assign({ radius: radiusNm * 1852 }, style));
+            }
+
+            if (area.geometry_type === 'polygon' && g.points && g.points.length > 2) {
+                const latlngs = g.points.map(p => [p[1], p[0]]);
+                return L.polygon(latlngs, style);
+            }
+
+            // 部分空域(如 RCR34、RCR38)只有弧形邊界近似的圓心/半徑資料，以圓形近似顯示
+            if (g.circle_part && g.circle_part.center) {
+                const radiusNm = g.circle_part.radius_nm != null ? g.circle_part.radius_nm : null;
+                if (radiusNm == null) return null;
+                return L.circle([g.circle_part.center[1], g.circle_part.center[0]], Object.assign({ radius: radiusNm * 1852, dashArray: '4,4' }, style));
+            }
+
+            return null;
+        }
+
+        function getAreaDisplayName(area) {
+            const place = area.name_zh || area.name_en || '';
+            return place ? `${area.id}(${place})` : area.id;
+        }
+
+        function buildRestrictedAreaLabel(area) {
+            const name = getAreaDisplayName(area);
+            const upper = area.upper_limit || (area.upper_limit_ft != null ? `${area.upper_limit_ft} FT` : '?');
+            const lower = area.lower_limit || (area.lower_limit_ft != null ? `${area.lower_limit_ft} FT` : '?');
+            return `${name}\n${lower} - ${upper}`;
+        }
+
+        function initRestrictedAreas() {
+            if (typeof RESTRICTED_AREAS_DATA === 'undefined' || !RESTRICTED_AREAS_DATA.areas) return;
+            const listEl = document.getElementById('restricted-area-list');
+
+            RESTRICTED_AREAS_DATA.areas.forEach(area => {
+                const shape = buildRestrictedAreaShape(area);
+                if (!shape) return;
+
+                const label = buildRestrictedAreaLabel(area);
+                shape.bindTooltip(label.replace('\n', '<br>'), { permanent: true, direction: 'center', className: 'restricted-area-label' });
+
+                let popupHtml = `<div style="color:#333; line-height:1.5; min-width:160px;">`;
+                popupHtml += `<div style="font-weight:bold; font-size:1.05em; color:#0066CC;">🚧 ${getAreaDisplayName(area)}</div><hr style="margin:5px 0; border:0; border-top:1px solid #ccc;">`;
+                popupHtml += `<b>高度：</b> ${area.lower_limit || 'SFC'} ~ ${area.upper_limit || '-'}<br>`;
+                if (area.contact) popupHtml += `<b>聯絡：</b> ${area.contact}<br>`;
+                if (area.remarks_zh) popupHtml += `<div style="margin-top:4px; font-size:0.9em; color:#555;">${area.remarks_zh}</div>`;
+                popupHtml += `</div>`;
+                shape.bindPopup(popupHtml);
+
+                const subLayer = L.layerGroup([shape]);
+                restrictedAreaSubLayers[area.id] = subLayer;
+                subLayer.addTo(restrictedAreaLayer);
+
+                if (listEl) {
+                    const row = document.createElement('div');
+                    row.className = 'restricted-area-row';
+                    const cbId = `ra-cb-${area.id}`;
+                    row.innerHTML = `<input type="checkbox" id="${cbId}" checked>
+                        <label for="${cbId}"><span class="ra-name">${getAreaDisplayName(area)}</span><br><span class="ra-alt">${area.lower_limit || 'SFC'} ~ ${area.upper_limit || '-'}</span></label>`;
+                    listEl.appendChild(row);
+                    row.querySelector('input').addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            subLayer.addTo(restrictedAreaLayer);
+                        } else {
+                            restrictedAreaLayer.removeLayer(subLayer);
+                        }
+                    });
+                }
+            });
+
+            ensureRestrictedGridPattern();
+
+            const selectAllBtn = document.getElementById('restricted-select-all');
+            const selectNoneBtn = document.getElementById('restricted-select-none');
+            if (selectAllBtn) selectAllBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('#restricted-area-list input[type="checkbox"]').forEach(cb => {
+                    if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+                });
+            });
+            if (selectNoneBtn) selectNoneBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('#restricted-area-list input[type="checkbox"]').forEach(cb => {
+                    if (cb.checked) { cb.checked = false; cb.dispatchEvent(new Event('change')); }
+                });
+            });
+
+            // 關閉鈕：只關閉子選單面板本身，不動地圖上的圖層 —
+            // 使用者已勾選要顯示的空域要繼續留在地圖上，不能連同面板一起被移除
+            const closeBtn = document.getElementById('restricted-area-panel-close');
+            if (closeBtn) closeBtn.addEventListener('click', () => {
+                document.getElementById('restricted-area-panel').style.display = 'none';
+            });
+        }
+        initRestrictedAreas();
+
+        async function loadPowerLines() {
+            let q = "";
+            // Define query based on mode
+            if (waypoints.length > 1) {
+                const radiusM = 1000; // 3 NM in meters
+                const line = turf.lineString(waypoints.map(p => [p.lng, p.lat]));
+                const buffered = turf.buffer(line, radiusM, { units: 'meters' });
+                // For long routes, simplify the buffer polygon to reduce query complexity
+                const simplified = turf.simplify(buffered, { tolerance: 0.0001, highQuality: false });
+                const polyCoords = simplified.geometry.coordinates[0].map(p => `${p[1]} ${p[0]}`).join(' ');
+                // Increase timeout for complex queries
+                q = `[out:json][timeout:120];(way["power"="line"](poly: "${polyCoords}");node["power"="tower"](poly: "${polyCoords}"););out body;>;out skel qt;`;
+            } else { // 'bounds' mode
+                if (map.getZoom() < 12) {
+                    return; // Zoomed out too far, do nothing, but keep data
+                }
+                const b = map.getBounds();
+                q = `[out:json][timeout:25];(way["power"="line"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()});node["power"="tower"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}););out body;>;out skel qt;`;
+            }
+
+            document.getElementById('loading-indicator').style.display = 'block';
+            try {
+                const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: q });
+                const data = await res.json();
+
+                const nodes = {};
+                data.elements.forEach(e => { if (e.type === 'node') nodes[e.id] = [e.lat, e.lon]; });
+
+                data.elements.forEach(e => {
+                    if (drawnPowerElementIds.has(e.id)) return; // Skip if already drawn
+
+                    if (e.type === 'way' && e.nodes) {
+                        const latlngs = e.nodes.map(id => nodes[id]).filter(n => n);
+                        if (latlngs.length > 1) {
+                            L.polyline(latlngs, { color: '#FF00FF', weight: 3, opacity: 0.9 }).addTo(powerLayer);
+                            drawnPowerElementIds.add(e.id);
+                        }
+                    }
+                    if (e.tags && e.tags.power === 'tower' && e.type === 'node') {
+                        L.circleMarker([e.lat, e.lon], { radius: 4, color: '#F00', fillColor: '#FF0', fillOpacity: 1 }).addTo(powerLayer);
+                        drawnPowerElementIds.add(e.id);
+                    }
+                });
+            } catch (e) {
+                console.error("Overpass API 電纜資料下載失敗:", e);
+            } finally {
+                document.getElementById('loading-indicator').style.display = 'none';
+            }
+        }
+        map.on('moveend', () => { if (isPowerLayerActive && (typeof waypoints === 'undefined' || waypoints.length === 0)) loadPowerLines(); });
+
+        // --- 6. VFR整合圖層控制 ---
+        const vfrOverlay = L.imageOverlay('vfr_chart.png', [[25.99, 119.08], [21.56, 122.48]], { opacity: 0.65 });
+        const aipLayer = L.layerGroup();
+
+        // --- 替換：改用 OpenAIP 動態抓取 RCAA 範圍內資料 ---
+        const OPENAIP_API_KEY = APP_CONFIG.OPENAIP_API_KEY;
+
+        async function fetchOpenAipData() {
+            try {
+                // 並發抓取台灣(TW)的機場與導航台資料
+                const [airportsRes, navaidsRes] = await Promise.all([
+                    fetch(`https://api.core.openaip.net/api/airports?apiKey=${OPENAIP_API_KEY}&country=TW&limit=150`),
+                    fetch(`https://api.core.openaip.net/api/navaids?apiKey=${OPENAIP_API_KEY}&country=TW&limit=150`)
+                ]);
+
+                if (!airportsRes.ok || !navaidsRes.ok) throw new Error("OpenAIP Fetch Failed");
+
+                const airportsData = await airportsRes.json();
+                const navaidsData = await navaidsRes.json();
+
+                // 處理機場資料
+                airportsData.items.forEach(apt => {
+                    if (!apt.geometry || !apt.geometry.coordinates) return;
+
+                    // 根據使用者要求，排除特定機場
+                    if (apt.icaoCode === "RCLG" || apt.icaoCode === "RCGM") return;
+
+                    const latlng = [apt.geometry.coordinates[1], apt.geometry.coordinates[0]];
+                    // 大型機場繪製半徑警示圈 (大約 5NM)
+                    L.circle(latlng, { radius: 9260, color: '#E066FF', dashArray: '10, 8', weight: 2, fill: false, opacity: 0.9 }).addTo(aipLayer);
+
+                    // 給圖示加上隱形背景 hitbox (有微量顏色)，保證瀏覽器能正確計算點擊命中
+                    const marker = L.marker(latlng, { icon: L.divIcon({ className: 'aip-icon', html: '<div style="width:30px;height:30px;background:rgba(255,255,255,0.01);cursor:pointer;border-radius:50%;">✈️</div>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
+                    let info = `${apt.icaoCode ? apt.icaoCode + ' ' : ''}${apt.name}`;
+                    // 讓標籤也可被點擊，轉發並攔截事件
+                    marker.bindTooltip(info, { permanent: true, direction: 'top', offset: [0, -10], className: 'aip-label', interactive: true });
+
+                    // 強制攔截點擊事件，直接開啟 Popup 並阻止傳遞給地圖
+                    const clickHandler = (e) => {
+                        if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                        marker.openPopup();
+                    };
+                    marker.on('click', clickHandler);
+                    marker.getTooltip().on('click', clickHandler);
+
+                    // --- 建立點擊顯示資料方塊 (Popup) ---
+                    let popupHtml = `<div style="color: #333; line-height: 1.5; min-width: 160px;">`;
+                    popupHtml += `<div style="font-weight:bold; font-size:1.1em; color:#E066FF;">🛫 ${info}</div><hr style="margin: 5px 0; border:0; border-top:1px solid #ccc;">`;
+                    if (apt.elevation && apt.elevation.value !== undefined) {
+                        const elevFt = apt.elevation.unit === 0 ? Math.round(apt.elevation.value * 3.28084) : apt.elevation.value;
+                        popupHtml += `⛰️ <b>標高：</b> ${elevFt} FT<br>`;
+                    }
+                    if (apt.runways && apt.runways.length > 0) {
+                        // 過濾出主要跑道，並過濾掉重複設計編號
+                        let rwyStrs = apt.runways.map(r => `RWY ${r.designator} (${r.dimension?.length?.value || '?'}m)`);
+                        let uniqueRwys = [...new Set(rwyStrs)];
+                        popupHtml += `🛣️ <b>跑道：</b><br><div style="padding-left:15px; font-size:0.9em;">${uniqueRwys.join('<br>')}</div>`;
+                    }
+                    if (apt.frequencies && apt.frequencies.length > 0) {
+                        const freqs = apt.frequencies.map(f => `${f.name || 'FREQ'} : <strong style="color:#0055ff;">${f.value}</strong>`);
+                        popupHtml += `📻 <b>通訊頻率：</b><br><div style="padding-left:15px; font-size:0.9em;">${freqs.join('<br>')}</div>`;
+                    }
+                    popupHtml += `</div>`;
+                    marker.bindPopup(popupHtml);
+
+                    aipLayer.addLayer(marker);
+                });
+
+                // 處理導航台資料 (VOR / NDB 等)
+                navaidsData.items.forEach(nav => {
+                    if (!nav.geometry || !nav.geometry.coordinates) return;
+                    const latlng = [nav.geometry.coordinates[1], nav.geometry.coordinates[0]];
+                    const marker = L.marker(latlng, { icon: L.divIcon({ className: 'aip-icon', html: '<div style="width:30px;height:30px;background:rgba(255,255,255,0.01);cursor:pointer;border-radius:50%;">📡</div>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
+                    let freq = nav.frequencies && nav.frequencies.length > 0 ? nav.frequencies[0].value : "";
+                    let info = `${nav.designator || ''} ${nav.name}`;
+
+                    let tooltipInfo = info;
+                    if (freq) tooltipInfo += `<br><span style="color:#FFFF00">${freq}</span>`;
+                    marker.bindTooltip(tooltipInfo, { permanent: true, direction: 'top', offset: [0, -10], className: 'aip-label', interactive: true });
+
+                    // 強制攔截點擊事件，直接開啟 Popup 並阻止傳遞給地圖
+                    const clickHandler = (e) => {
+                        if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                        marker.openPopup();
+                    };
+                    marker.on('click', clickHandler);
+                    marker.getTooltip().on('click', clickHandler);
+
+                    // --- 建立點擊顯示資料方塊 (Popup) ---
+                    let popupHtml = `<div style="color: #333; line-height: 1.5; min-width: 140px;">`;
+                    popupHtml += `<div style="font-weight:bold; font-size:1.1em; color:#00FFFF; text-shadow: 1px 1px 1px #000;">📡 ${info}</div><hr style="margin: 5px 0; border:0; border-top:1px solid #ccc;">`;
+                    if (nav.elevation && nav.elevation.value !== undefined) {
+                        const elevFt = nav.elevation.unit === 0 ? Math.round(nav.elevation.value * 3.28084) : nav.elevation.value;
+                        popupHtml += `⛰️ <b>標高：</b> ${elevFt} FT<br>`;
+                    }
+                    if (nav.frequencies && nav.frequencies.length > 0) {
+                        const freqs = nav.frequencies.map(f => `<strong style="color:#0055ff;">${f.value}</strong>`);
+                        popupHtml += `📻 <b>頻率：</b><br><div style="padding-left:15px;">${freqs.join(', ')}</div>`;
+                    }
+                    popupHtml += `</div>`;
+                    marker.bindPopup(popupHtml);
+
+                    aipLayer.addLayer(marker);
+                });
+
+            } catch (e) {
+                console.error("載入 OpenAIP 資料失敗:", e);
+            }
+        }
+
+        // 呼叫抓取函式
+        fetchOpenAipData();
+
+        const layerControl = L.control.layers({
+            "衛星地圖": satellite,
+            "標準地圖": osm,
+            "地形地圖": topo, // 已加回
+            "光害地圖": night // 已加回
+        }, {
+            "🔌 高壓電纜(塔)": powerLayer,
+            "🚨 MSA地障警示": msaLayer,
+            "🛡️ 防空隱蔽分析": missileLayer,
+            "🌑 夜間陰影區": nightShadowGroup,
+            "✈️ 機場與助導航": aipLayer,
+            "📄 VFR目視航路": vfrOverlay,
+            "🚧 限制空域": restrictedAreaLayer
+        }, { position: 'topleft', collapsed: true }).addTo(map);
+
+        // 強制點擊切換
+        const cContainer = layerControl.getContainer();
+        cContainer.onmouseover = () => { }; cContainer.onmouseout = () => { };
+        cContainer.querySelector('.leaflet-control-layers-toggle').addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            cContainer.classList.contains('leaflet-control-layers-expanded') ? layerControl.collapse() : layerControl.expand();
+        });
+
+        // 監聽電纜圖層開關
+        map.on('overlayadd', e => { if (e.name === "🔌 高壓電纜(塔)") { isPowerLayerActive = true; loadPowerLines(); } });
+        map.on('overlayremove', e => { if (e.name === "🔌 高壓電纜(塔)") { isPowerLayerActive = false; } });
+
+        // --- 圖層與控制面板連動 ---
+        map.on('overlayadd', e => {
+            if (e.name === "🌑 夜間陰影區") { updateMoonInfo(); document.getElementById('ctrl-nvg').style.display = 'flex'; }
+            if (e.name === "🚨 MSA地障警示") { document.getElementById('ctrl-msa').style.display = 'flex'; document.getElementById('msa-legend').style.display = 'flex'; }
+            if (e.name === "🛡️ 防空隱蔽分析") { document.getElementById('ctrl-missile').style.display = 'flex'; }
+            if (e.name === "🚧 限制空域") { document.getElementById('restricted-area-panel').style.display = 'flex'; }
+        });
+        map.on('overlayremove', e => {
+            if (e.name === "🌑 夜間陰影區") { updateMoonInfo(); document.getElementById('ctrl-nvg').style.display = 'none'; }
+            if (e.name === "🚨 MSA地障警示") { document.getElementById('ctrl-msa').style.display = 'none'; document.getElementById('msa-legend').style.display = 'none'; }
+            if (e.name === "🛡️ 防空隱蔽分析") { document.getElementById('ctrl-missile').style.display = 'none'; }
+            if (e.name === "🚧 限制空域") { document.getElementById('restricted-area-panel').style.display = 'none'; }
+        });
+
+        // --- 7. 雷達播放器 ---
+        let cwaRadarLayer = null;
+        let radarTimer = null;
+        let isRadarPlaying = false;
+        let radarCurrentFrame = 11;
+
+        function generateRadarUrls() {
+            const urls = [];
+            const labels = [];
+            const now = new Date();
+            // [關鍵修正] 經過測試，官網歷史圖資位於 Data/radar/ 下，且產製延遲約 10-15 分鐘
+            let baseTime = new Date(now.getTime() - 15 * 60000);
+            baseTime.setMinutes(Math.floor(baseTime.getMinutes() / 10) * 10, 0, 0);
+
+            for (let i = 0; i <= 12; i++) {
+                const t = new Date(baseTime.getTime() - (12 - i) * 10 * 60000);
+                const yyyy = t.getFullYear();
+                const mm = String(t.getMonth() + 1).padStart(2, '0');
+                const dd = String(t.getDate()).padStart(2, '0');
+                const hh = String(t.getHours()).padStart(2, '0');
+                const min = String(t.getMinutes()).padStart(2, '0');
+                const timestamp = `${yyyy}${mm}${dd}${hh}${min}`;
+
+                // 使用經測試有效的官網 3600 規格路徑
+                urls.push(`https://www.cwa.gov.tw/Data/radar/CV1_3600_${timestamp}.png`);
+                labels.push(`${hh}:${min}`);
+            }
+            return { urls, labels };
+        }
+
+        const radarPlayer = {
+            data: { urls: [], labels: [] },
+            preloaded: {},
+            init: function () {
+                const { urls, labels } = generateRadarUrls();
+                this.data.urls = urls;
+                this.data.labels = labels;
+                this.preloaded = {};
+
+                const slider = document.getElementById('radar-slider');
+                slider.max = urls.length - 1;
+                slider.value = urls.length - 1;
+                radarCurrentFrame = urls.length - 1;
+
+                // 預載圖片機制
+                urls.forEach((url, i) => {
+                    const img = new Image();
+                    img.src = url;
+                    this.preloaded[i] = img;
+                });
+
+                document.getElementById('radar-prev').onclick = () => this.step(-1);
+                document.getElementById('radar-next').onclick = () => this.step(1);
+                document.getElementById('radar-play').onclick = () => this.toggle();
+                slider.oninput = (e) => {
+                    this.pause();
+                    this.showFrame(parseInt(e.target.value));
+                };
+
+                this.showFrame(radarCurrentFrame);
+            },
+            showFrame: function (index) {
+                radarCurrentFrame = index;
+                const url = this.data.urls[index];
+                const label = this.data.labels[index];
+
+                document.getElementById('radar-slider').value = index;
+                document.getElementById('current-radar-time').innerText = label;
+
+                const bounds = [[17.75, 115.00], [29.25, 126.50]];
+                if (cwaRadarLayer) {
+                    cwaRadarLayer.setUrl(url);
+                } else {
+                    cwaRadarLayer = L.imageOverlay(url, bounds, {
+                        opacity: 0.65,
+                        zIndex: 500,
+                        interactive: false,
+                        className: 'radar-image-layer' // 新增 class 以便用 CSS 去除白底
+                    });
+                    cwaRadarLayer.addTo(map);
+                }
+            },
+            step: function (delta) {
+                this.pause();
+                let next = radarCurrentFrame + delta;
+                if (next < 0) next = this.data.urls.length - 1;
+                if (next >= this.data.urls.length) next = 0;
+                this.showFrame(next);
+            },
+            toggle: function () {
+                if (isRadarPlaying) this.pause();
+                else this.play();
+            },
+            play: function () {
+                if (isRadarPlaying) return;
+                isRadarPlaying = true;
+                document.getElementById('radar-play').innerText = "⏸";
+                radarTimer = setInterval(() => {
+                    radarCurrentFrame = (radarCurrentFrame + 1) % this.data.urls.length;
+                    this.showFrame(radarCurrentFrame);
+                }, 1000); // 稍微放慢播放速度
+            },
+            pause: function () {
+                isRadarPlaying = false;
+                document.getElementById('radar-play').innerText = "▶";
+                if (radarTimer) clearInterval(radarTimer);
+                radarTimer = null;
+            },
+            stop: function () {
+                this.pause();
+                if (cwaRadarLayer) {
+                    map.removeLayer(cwaRadarLayer);
+                    cwaRadarLayer = null;
+                }
+            }
+        };
+
+        function initRadar() {
+            layerControl.addOverlay(L.layerGroup([]), "🌧️ 氣象雷達");
+        }
+
+        map.on('overlayadd', e => {
+            if (e.name === "🌧️ 氣象雷達") {
+                document.getElementById('radar-legend').style.display = 'flex';
+                document.getElementById('radar-player-ctrl').style.display = 'flex';
+                radarPlayer.init();
+            }
+        });
+
+        map.on('overlayremove', e => {
+            if (e.name === "🌧️ 氣象雷達") {
+                document.getElementById('radar-legend').style.display = 'none';
+                document.getElementById('radar-player-ctrl').style.display = 'none';
+                radarPlayer.stop();
+            }
+        });
+
+        // 已徹底移除 RainViewer 龐大的迴圈輪播機制與 429 Error 風險，大幅提升系統效能
+
+        // --- 8. 航路規劃核心 ---
+        let waypoints = [], markers = [], segmentLabels = [], polyline = null;
+
+        // 確保標籤樣式正確 (透明背景)
+        const toDegMin = (deg, isLat) => {
+            const abs = Math.abs(deg); const d = Math.floor(abs); const m = ((abs - d) * 60).toFixed(1);
+            return `${isLat ? (deg >= 0 ? 'N' : 'S') : (deg >= 0 ? 'E' : 'W')} ${d}° ${m}'`;
+        };
+        const formatTime = (s) => {
+            const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60);
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+        };
+        async function getElev(lat, lng) {
+            try {
+                const z = 14;
+                const tileXYZ = getTileXYZ(lat, lng, z);
+                const tilePos = getTileFraction(lng, lat, z);
+
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${tileXYZ.x}/${tileXYZ.y}.png`;
+
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                });
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 1;
+                canvas.height = 1;
+                const ctx = canvas.getContext('2d');
+
+                const px = Math.floor((tilePos.x % 1) * 256);
+                const py = Math.floor((tilePos.y % 1) * 256);
+
+                ctx.drawImage(img, -px, -py);
+                const data = ctx.getImageData(0, 0, 1, 1).data;
+                const h = (data[0] * 256 + data[1] + data[2] / 256) - 32768;
+                return Math.round(h * 3.28084); // 轉換為英呎
+            } catch (e) {
+                return "---";
+            }
+        }
+
+        // --- [新增] 航線廊道最高點分析 ---
+        async function getCorridorMaxElevation(latlng1, latlng2) {
+            const calcIndicator = document.getElementById('calc-indicator');
+            calcIndicator.innerText = '🛰️ 分析航線地形剖面中...';
+            calcIndicator.style.display = 'block';
+
+            try {
+                const corridorWidthKm = 1.0; // 1km total width
+                const z = 13; // Zoom level for terrain tiles
+                const tileSize = 256;
+
+                const line = turf.lineString([[latlng1.lng, latlng1.lat], [latlng2.lng, latlng2.lat]]);
+                const buffered = turf.buffer(line, corridorWidthKm / 2, { units: 'kilometers' });
+                const bbox = turf.bbox(buffered);
+
+                const topLeftTile = getTileXYZ(bbox[3], bbox[0], z);
+                const bottomRightTile = getTileXYZ(bbox[1], bbox[2], z);
+
+                const cols = bottomRightTile.x - topLeftTile.x + 1;
+                const rows = bottomRightTile.y - topLeftTile.y + 1;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = cols * tileSize;
+                canvas.height = rows * tileSize;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+                const promises = [];
+                for (let x = topLeftTile.x; x <= bottomRightTile.x; x++) {
+                    for (let y = topLeftTile.y; y <= bottomRightTile.y; y++) {
+                        const p = new Promise((resolve) => {
+                            const img = new Image();
+                            img.crossOrigin = "Anonymous";
+                            img.src = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+                            img.onload = () => {
+                                ctx.drawImage(img, (x - topLeftTile.x) * tileSize, (y - topLeftTile.y) * tileSize);
+                                resolve();
+                            };
+                            img.onerror = () => {
+                                ctx.fillStyle = 'black';
+                                ctx.fillRect((x - topLeftTile.x) * tileSize, (y - topLeftTile.y) * tileSize, tileSize, tileSize);
+                                resolve();
+                            };
+                        });
+                        promises.push(p);
+                    }
+                }
+                await Promise.all(promises);
+
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                const workerCode = `
+                    self.importScripts('https://unpkg.com/@turf/turf/turf.min.js');
+                    function pointToLatLng(x, y, z) {
+                        const n = Math.pow(2, z);
+                        const lng = x / n * 360 - 180;
+                        const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI;
+                        return { lat, lng };
+                    }
+                    self.onmessage = function(e) {
+                        const { buffer, width, height, corridor, z, topLeftTileX, topLeftTileY } = e.data;
+                        const data = new Uint8ClampedArray(buffer);
+                        let maxElev = -Infinity;
+                        for (let y = 0; y < height; y+=4) { // Sample every 4 pixels for performance
+                            for (let x = 0; x < width; x+=4) {
+                                const tileX = topLeftTileX + (x + 0.5) / 256;
+                                const tileY = topLeftTileY + (y + 0.5) / 256;
+                                const { lat, lng } = pointToLatLng(tileX, tileY, z);
+                                const pt = turf.point([lng, lat]);
+                                if (turf.booleanPointInPolygon(pt, corridor)) {
+                                    const i = (y * width + x) * 4;
+                                    const h = (data[i] * 256 + data[i+1] + data[i+2] / 256) - 32768;
+                                    if (h > maxElev) maxElev = h;
+                                }
+                            }
+                        }
+                        self.postMessage(maxElev);
+                    };
+                `;
+                const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+                const workerUrl = URL.createObjectURL(workerBlob);
+                const worker = new Worker(workerUrl);
+
+                const maxElevMeters = await new Promise((resolve) => {
+                    worker.onmessage = (e) => resolve(e.data);
+                    worker.postMessage({
+                        buffer: imgData.data.buffer,
+                        width: canvas.width,
+                        height: canvas.height,
+                        corridor: buffered,
+                        z: z,
+                        topLeftTileX: topLeftTile.x,
+                        topLeftTileY: topLeftTile.y
+                    }, [imgData.data.buffer]);
+                });
+
+                worker.terminate();
+                URL.revokeObjectURL(workerUrl);
+                return maxElevMeters;
+            } catch (err) {
+                console.error("Error in getCorridorMaxElevation:", err);
+                return -1;
+            } finally {
+                calcIndicator.style.display = 'none';
+                calcIndicator.innerText = '📡 計算雷達視域中...';
+            }
+        }
+
+        map.on('click', e => {
+            // 嚴格攔截所有在地標與標籤上的點擊，防止穿透到底圖生成航向點
+            if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest) {
+                if (e.originalEvent.target.closest('.leaflet-popup') ||
+                    e.originalEvent.target.closest('.leaflet-marker-icon') ||
+                    e.originalEvent.target.closest('.leaflet-tooltip') ||
+                    e.originalEvent.target.closest('.aip-icon') ||
+                    e.originalEvent.target.closest('.aip-label')) {
+                    return;
+                }
+            }
+
+            // 如果當前畫面上有任何 Popup 已經是開啟狀態，這次的點擊目的是為了「關閉 Popup」，所以不應該生成航線點！
+            let isPopupOpen = false;
+            map.eachLayer(layer => {
+                if (layer instanceof L.Popup) isPopupOpen = true;
+            });
+            if (isPopupOpen) {
+                return;
+            }
+
+            if (!isPlacingMissile) addWP(e.latlng);
+        });
+        async function addWP(latlng) {
+            const marker = L.marker(latlng, { draggable: true }).addTo(map);
+            marker.elevText = "---";
+            // 綁定透明標籤
+            marker.bindTooltip("", { permanent: true, direction: "top", offset: [0, -15], className: 'big-label' });
+            marker.coordTooltip = L.tooltip({ permanent: true, direction: 'left', offset: [-20, 0], className: 'big-label' });
+            marker.bindTooltip(marker.coordTooltip);
+            const refresh = async (m) => { m.elevText = await getElev(m.getLatLng().lat, m.getLatLng().lng); updatePlan(); if (isPowerLayerActive) loadPowerLines(); };
+            marker.on('dragend', () => { const i = markers.indexOf(marker); waypoints[i] = marker.getLatLng(); refresh(marker); });
+
+            // [新增] 拖曳時：方位角吸附 + 即時顯示航段資訊 (手機長按拖曳時參考用)
+            marker.on('drag', (e) => {
+                const i = markers.indexOf(marker);
+                let newPos = e.latlng;
+                if (i > 0) {
+                    const prev = waypoints[i - 1];
+                    const b = turf.bearing([prev.lng, prev.lat], [newPos.lng, newPos.lat]);
+                    let snap = null;
+                    if (Math.abs(b) < 5) snap = 0;
+                    else if (Math.abs(b - 90) < 5) snap = 90;
+                    else if (Math.abs(Math.abs(b) - 180) < 5) snap = 180;
+                    else if (Math.abs(b + 90) < 5) snap = -90;
+                    if (snap !== null) {
+                        const dist = turf.distance([prev.lng, prev.lat], [newPos.lng, newPos.lat]);
+                        const dest = turf.destination([prev.lng, prev.lat], dist, snap);
+                        newPos = new L.LatLng(dest.geometry.coordinates[1], dest.geometry.coordinates[0]);
+                        marker.setLatLng(newPos);
+                    }
+                }
+
+                waypoints[i] = newPos;
+                if (polyline) polyline.setLatLngs(waypoints);
+
+                // --- 即時資訊顯示計算 ---
+                const k = 120;
+                let info = `<div style="text-align:center; font-weight:bold; color:#00FFFF; font-size:1.1em; margin-bottom: 2px;">${i === 0 ? "SP" : `ACP ${i}`}</div>`;
+
+                // 計算與"前一點"的關係 (Inbound)
+                if (i > 0) {
+                    const prev = waypoints[i - 1];
+                    const prevMarker = markers[i - 1];
+                    let prevK = prevMarker && prevMarker.customAirspeed ? parseFloat(prevMarker.customAirspeed) : k;
+                    const d = turf.distance([prev.lng, prev.lat], [newPos.lng, newPos.lat], { units: 'nauticalmiles' });
+                    const b = (turf.bearing([prev.lng, prev.lat], [newPos.lng, newPos.lat]) + 360) % 360;
+
+                    let calcD = d;
+                    if ((i - 1) === 0) calcD += 2; // 起飛段緩衝
+
+                    const s = Math.round((calcD / prevK) * 3600);
+                    info += `<div style="font-size:0.9em; color:#FFFF00; border-top:1px solid #555; padding-top:2px;">
+                                ⬅ ${b.toFixed(0)}° / ${d.toFixed(1)} NM / ${prevK} KT<br>
+                                ⏱ ${formatTime(s)}
+                             </div>`;
+                }
+
+                // 計算與"後一點"的關係 (Outbound)
+                if (i < waypoints.length - 1) {
+                    const next = waypoints[i + 1];
+                    let currentK = marker.customAirspeed ? parseFloat(marker.customAirspeed) : k;
+                    const d = turf.distance([newPos.lng, newPos.lat], [next.lng, next.lat], { units: 'nauticalmiles' });
+                    const b = (turf.bearing([newPos.lng, newPos.lat], [next.lng, next.lat]) + 360) % 360;
+
+                    let calcD = d;
+                    if (i === waypoints.length - 2) calcD += 2; // 落地段緩衝
+
+                    const s = Math.round((calcD / currentK) * 3600);
+                    info += `<div style="font-size:0.9em; color:#00FF00; border-top:1px solid #555; margin-top:2px; padding-top:2px;">
+                                ➡ ${b.toFixed(0)}° / ${d.toFixed(1)} NM / ${currentK} KT<br>
+                                ⏱ ${formatTime(s)}
+                             </div>`;
+                }
+
+                // 強制開啟並更新標籤
+                if (marker.getTooltip()) {
+                    marker.setTooltipContent(info);
+                    marker.openTooltip();
+                }
+            });
+
+            markers.push(marker); waypoints.push(latlng); refresh(marker); updatePlan();
+        }
+        function updatePlan() {
+            const k = 120;
+            if (polyline) map.removeLayer(polyline);
+            segmentLabels.forEach(l => map.removeLayer(l));
+            segmentLabels = [];
+            let tD = 0, tS = 0, tF = 0;
+
+            waypoints.forEach((pt, i) => {
+                if (!markers[i]) return; // Marker might have been deleted
+                let defaultTitle = i === 0 ? "SP" : `ACP ${i}`;
+                const title = markers[i].customName || defaultTitle;
+                markers[i].getTooltip().setContent(title);
+                markers[i].coordTooltip.setContent(`<div>${title}</div>標高: <span>${markers[i].elevText}</span> ft`);
+
+                if (i < waypoints.length - 1) {
+                    const next = waypoints[i + 1];
+                    const d = turf.distance([pt.lng, pt.lat], [next.lng, next.lat], { units: 'nauticalmiles' });
+                    const b = (turf.bearing([pt.lng, pt.lat], [next.lng, next.lat]) + 360) % 360;
+
+                    let calcD = d;
+                    if (i === 0) calcD += 2;
+                    if (i === waypoints.length - 2) calcD += 2;
+
+                    let currentK = markers[i].customAirspeed ? parseFloat(markers[i].customAirspeed) : (k || 120);
+                    let currentFuelRate = markers[i].customFuelRate ? parseFloat(markers[i].customFuelRate) : 800;
+                    const s = Math.round((calcD / currentK) * 3600);
+                    tD += d; tS += s; tF += (s / 3600) * currentFuelRate;
+
+                    const mid = turf.midpoint([pt.lng, pt.lat], [next.lng, next.lat]);
+                    const labelHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.floor(s / 60)}'${s % 60}"&nbsp;/&nbsp;...`;
+                    const label = L.marker([mid.geometry.coordinates[1], mid.geometry.coordinates[0]], {
+                        icon: L.divIcon({ className: 'big-label segment-label', html: labelHtml })
+                    }).addTo(map);
+                    label.segmentIndex = i;
+                    segmentLabels.push(label);
+
+                    getCorridorMaxElevation(pt, next).then(maxElevM => {
+                        const currentLabel = segmentLabels.find(l => l.segmentIndex === i);
+                        if (!currentLabel) return; // Label was removed, do nothing
+
+                        if (maxElevM === -Infinity || maxElevM === -1) {
+                            const failedHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.floor(s / 60)}'${s % 60}"&nbsp;/&nbsp;<span style="color:#FF4444;">失敗</span>`;
+                            currentLabel.setIcon(L.divIcon({ className: 'big-label segment-label', html: failedHtml }));
+                            return;
+                        }
+                        const suggestedAltFt = Math.ceil(((maxElevM * 3.28084) + 500) / 100) * 100;
+                        currentLabel.suggestedAltFt = suggestedAltFt; // Store for potential future use
+                        let altDisplay = markers[i].customAlt || suggestedAltFt;
+const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.floor(s / 60)}'${s % 60}"&nbsp;/&nbsp;${altDisplay}FT`;
+                        currentLabel.setIcon(L.divIcon({ className: 'big-label segment-label', html: newHtml }));
+                    });
+                }
+            });
+            if (waypoints.length > 1) polyline = L.polyline(waypoints, { color: '#00FFFF', weight: 5, dashArray: '15, 10' }).addTo(map);
+            document.getElementById('totalDistance').textContent = tD.toFixed(1) + ' NM';
+            document.getElementById('totalTime').textContent = formatTime(tS);
+            document.getElementById('totalFuel').textContent = tF.toFixed(1) + ' lbs';
+        }
+        document.getElementById('delete-btn').onclick = () => { if (waypoints.length > 0) { waypoints.pop(); map.removeLayer(markers.pop()); updatePlan(); if (isPowerLayerActive) loadPowerLines(); } };
+        document.getElementById('export-btn').onclick = async () => {
+            if (waypoints.length < 2) return alert("請至少設定兩個航點");
+
+            const calcIndicator = document.getElementById('calc-indicator');
+            calcIndicator.innerText = '🚢 準備匯出資料...';
+            calcIndicator.style.display = 'block';
+
+            const k = 120;
+            let csv = "\ufeff航點,航向,距離(NM),時間,空速(KT),油耗(lb),建議高度(ft),緯度,經度,標高(ft)\n";
+            let tD = 0, tS = 0, tF = 0;
+
+            const segmentAlts = [];
+            for (let i = 0; i < waypoints.length - 1; i++) {
+                calcIndicator.innerText = `分析第 ${i + 1} 段航線地形...`;
+                const pt = waypoints[i];
+                const next = waypoints[i + 1];
+                const maxElevM = await getCorridorMaxElevation(pt, next);
+                if (maxElevM === -Infinity || maxElevM === -1) {
+                    segmentAlts.push("計算失敗");
+                } else {
+                    const suggestedAltFt = Math.ceil(((maxElevM * 3.28084) + 500) / 100) * 100;
+                    segmentAlts.push(suggestedAltFt);
+                }
+            }
+            calcIndicator.innerText = `✅ 地形分析完成，正在產生CSV...`;
+
+            waypoints.forEach((pt, i) => {
+                let c = "", d = "", t = "", spd = "", f = "", sa = "";
+                if (i < waypoints.length - 1) {
+                    const next = waypoints[i + 1];
+                    const dist = turf.distance([pt.lng, pt.lat], [next.lng, next.lat], { units: 'nauticalmiles' });
+                    const brg = (turf.bearing([pt.lng, pt.lat], [next.lng, next.lat]) + 360) % 360;
+
+                    let calcDist = dist;
+                    if (i === 0) calcDist += 2;
+                    if (i === waypoints.length - 2) calcDist += 2;
+
+                    let currentK = markers[i].customAirspeed ? parseFloat(markers[i].customAirspeed) : (k || 120);
+                    let currentFuelRate = markers[i].customFuelRate ? parseFloat(markers[i].customFuelRate) : 800;
+                    const sec = Math.round((calcDist / currentK) * 3600);
+                    const fuel = (sec / 3600) * currentFuelRate;
+                    tD += dist; tS += sec; tF += fuel;
+                    c = brg.toFixed(0) + "°";
+                    d = dist.toFixed(1);
+                    t = formatTime(sec);
+                    spd = currentK;
+                    f = fuel.toFixed(1);
+                    sa = segmentAlts[i];
+                    if (markers[i].customAlt) sa = markers[i].customAlt;
+                }
+                let defaultTitle = i === 0 ? 'SP' : `ACP ${i}`;
+                const name = markers[i] && markers[i].customName ? markers[i].customName : defaultTitle;
+                const elevText = markers[i] ? markers[i].elevText : '---';
+                csv += `${name},${c},${d},${t},${spd},${f},${sa},${pt.lat.toFixed(5)},${pt.lng.toFixed(5)},${elevText}\n`;
+            });
+
+            csv += `總計,,${tD.toFixed(1)},${formatTime(tS)},,${tF.toFixed(1)},,,,,\n`;
+            calcIndicator.style.display = 'none';
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "航空計畫_Summary.csv";
+            link.click();
+        };
+
+        document.getElementById('export-gpx-btn').onclick = () => {
+            if (waypoints.length < 2) return alert("請至少設定兩個航點");
+
+            let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
+            gpx += '<gpx version="1.1" creator="簡易航空計畫器" xmlns="http://www.topografix.com/GPX/1/1">\n';
+
+            // 1. Export Waypoints (Using plan altitude)
+            waypoints.forEach((pt, i) => {
+                let defaultTitle = i === 0 ? 'SP' : `ACP ${i}`;
+                const name = markers[i] && markers[i].customName ? markers[i].customName : defaultTitle;
+                
+                let altFt = 0;
+                if (i === 0) {
+                    altFt = (markers[0] && markers[0].elevText && !isNaN(parseFloat(markers[0].elevText))) ? parseFloat(markers[0].elevText) : 0;
+                } else {
+                    altFt = (markers[i] && markers[i].customAlt) ? parseFloat(markers[i].customAlt) : 
+                            (segmentLabels[i-1] && segmentLabels[i-1].suggestedAltFt ? segmentLabels[i-1].suggestedAltFt : 0);
+                }
+                const elev = altFt / 3.28084;
+
+                gpx += `  <wpt lat="${pt.lat.toFixed(6)}" lon="${pt.lng.toFixed(6)}">\n`;
+                gpx += `    <name>${name}</name>\n`;
+                if (elev) gpx += `    <ele>${elev.toFixed(1)}</ele>\n`;
+                gpx += `  </wpt>\n`;
+            });
+
+            // 2. Export Track with interpolated points and TIME
+            gpx += `  <trk>\n`;
+            gpx += `    <name>飛行計畫航線</name>\n`;
+            gpx += `    <trkseg>\n`;
+
+            const intervalKm = 0.5; // 每 500 公尺一個點
+            let currentTimeMs = Date.now(); // 從現在開始起算
+
+            for (let i = 0; i < waypoints.length - 1; i++) {
+                const ptA = waypoints[i];
+                const ptB = waypoints[i+1];
+                
+                let eleA_ft = 0;
+                if (i === 0) {
+                    eleA_ft = (markers[0] && markers[0].elevText && !isNaN(parseFloat(markers[0].elevText))) ? parseFloat(markers[0].elevText) : 0;
+                } else {
+                    eleA_ft = (markers[i] && markers[i].customAlt) ? parseFloat(markers[i].customAlt) : 
+                              (segmentLabels[i-1] && segmentLabels[i-1].suggestedAltFt ? segmentLabels[i-1].suggestedAltFt : 0);
+                }
+                const eleA = eleA_ft / 3.28084;
+
+                let eleB_ft = 0;
+                if (markers[i+1] && markers[i+1].customAlt) {
+                    eleB_ft = parseFloat(markers[i+1].customAlt);
+                } else {
+                    eleB_ft = (segmentLabels[i] && segmentLabels[i].suggestedAltFt) ? segmentLabels[i].suggestedAltFt : eleA_ft;
+                }
+                const eleB = eleB_ft / 3.28084;
+
+                const currentK = (markers[i] && markers[i].customAirspeed) ? parseFloat(markers[i].customAirspeed) : 120;
+                const speedKmh = currentK * 1.852;
+                const msPerKm = (1 / speedKmh) * 3600 * 1000;
+
+                const line = turf.lineString([[ptA.lng, ptA.lat], [ptB.lng, ptB.lat]]);
+                const totalDist = turf.length(line, {units: 'kilometers'});
+                
+                // Add start point of segment
+                const timeStrA = new Date(currentTimeMs).toISOString();
+                gpx += `      <trkpt lat="${ptA.lat.toFixed(6)}" lon="${ptA.lng.toFixed(6)}"><ele>${eleA.toFixed(1)}</ele><time>${timeStrA}</time></trkpt>\n`;
+                
+                // Interpolate
+                let currentDist = intervalKm;
+                while (currentDist < totalDist) {
+                    const along = turf.along(line, currentDist, {units: 'kilometers'});
+                    const fraction = currentDist / totalDist;
+                    const interpEle = eleA + (eleB - eleA) * fraction;
+                    const coords = along.geometry.coordinates; // [lng, lat]
+                    
+                    const timeStr = new Date(currentTimeMs + currentDist * msPerKm).toISOString();
+                    
+                    gpx += `      <trkpt lat="${coords[1].toFixed(6)}" lon="${coords[0].toFixed(6)}"><ele>${interpEle.toFixed(1)}</ele><time>${timeStr}</time></trkpt>\n`;
+                    currentDist += intervalKm;
+                }
+                currentTimeMs += totalDist * msPerKm;
+            }
+            
+            // Add the very last point
+            const lastPt = waypoints[waypoints.length - 1];
+            const lastIdx = waypoints.length - 1;
+            const lastEle_ft = (markers[lastIdx] && markers[lastIdx].customAlt) ? parseFloat(markers[lastIdx].customAlt) : 
+                               (segmentLabels[lastIdx-1] && segmentLabels[lastIdx-1].suggestedAltFt ? segmentLabels[lastIdx-1].suggestedAltFt : 0);
+            const lastEle = lastEle_ft / 3.28084;
+            
+            const timeStrLast = new Date(currentTimeMs).toISOString();
+            gpx += `      <trkpt lat="${lastPt.lat.toFixed(6)}" lon="${lastPt.lng.toFixed(6)}"><ele>${lastEle.toFixed(1)}</ele><time>${timeStrLast}</time></trkpt>\n`;
+
+            gpx += `    </trkseg>\n`;
+            gpx += `  </trk>\n`;
+            gpx += `</gpx>`;
+
+            // Save GPX to sessionStorage for 3D analysis
+            sessionStorage.setItem('mission_gpx', gpx);
+            
+            // Save missile threat data for 3D analysis
+            let threatData = null;
+            if (typeof lastMissileLatLng !== 'undefined' && lastMissileLatLng) {
+                const altEl = document.getElementById('missile-alt');
+                const rangeEl = document.getElementById('missile-range');
+                threatData = {
+                    lat: lastMissileLatLng.lat,
+                    lng: lastMissileLatLng.lng,
+                    altFt: altEl ? (parseInt(altEl.value) || 0) : 0,
+                    rangeNm: rangeEl ? (parseFloat(rangeEl.value) || 0) : 0
+                };
+            }
+            if (threatData) {
+                sessionStorage.setItem('mission_threat', JSON.stringify(threatData));
+            } else {
+                sessionStorage.removeItem('mission_threat'); // clear if none
+            }
+
+            // Store in global window object for cross-tab postMessage bridge (file:// fallback)
+            window.latestGpxString = gpx;
+            window.latestThreatData = threatData;
+
+            // 把資料直接掛在網址 hash 上：file:// 雙擊開啟時，每個檔案常被視為不同來源，
+            // sessionStorage / window.opener 不保證能跨分頁使用，網址傳遞才是唯一保證能送達的方式
+            const missionPayload = encodeURIComponent(JSON.stringify({ gpx, threat: threatData }));
+
+            // Open 3D analysis page
+            window.open('FDR/analysis.html#data=' + missionPayload, '_blank');
+        };
+
+        // 監聽 3D 分析頁面 (FDR/analysis.html) 發送的資料請求
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'REQUEST_MISSION_DATA') {
+                if (window.latestGpxString) {
+                    event.source.postMessage({
+                        type: 'DELIVER_MISSION_DATA',
+                        gpx: window.latestGpxString,
+                        threat: window.latestThreatData
+                    }, '*');
+                }
+            }
+        });
+
+        // --- 9. 防空隱蔽分析 (Viewshed Analysis) ---
+        let isPlacingMissile = false;
+        let lastMissileLatLng = null;
+        const btnMissile = document.getElementById('btn-missile');
+
+        // 監聽參數變更，即時重新計算
+        document.getElementById('missile-range').onchange = () => { if (lastMissileLatLng) calculateViewshed(lastMissileLatLng); };
+        document.getElementById('missile-alt').onchange = () => { if (lastMissileLatLng) calculateViewshed(lastMissileLatLng); };
+
+        function adjustAlt(delta) {
+            const el = document.getElementById('missile-alt');
+            let val = parseInt(el.value) || 0;
+            val += delta;
+            if (val < 0) val = 0;
+            el.value = val;
+            if (lastMissileLatLng) calculateViewshed(lastMissileLatLng);
+        }
+
+        function adjustRange(delta) {
+            const el = document.getElementById('missile-range');
+            let val = parseFloat(el.value) || 0;
+            val += delta;
+            if (val < 1) val = 1; // 最小範圍限制為 1 NM
+            el.value = val;
+            if (lastMissileLatLng) calculateViewshed(lastMissileLatLng);
+        }
+
+        function adjustAirspeed(delta) {
+            const el = document.getElementById('airspeed');
+            let val = parseFloat(el.value) || 0;
+            val += delta;
+            if (val < 1) val = 1;
+            el.value = val;
+            updatePlan();
+        }
+
+        function adjustFuel(delta) {
+            const el = document.getElementById('fuelBurn');
+            let val = parseFloat(el.value) || 0;
+            val += delta;
+            if (val < 0) val = 0;
+            el.value = val;
+            updatePlan();
+        }
+
+        function adjustMsaHeight(delta) {
+            const el = document.getElementById('msaHeight');
+            let val = parseFloat(el.value) || 0;
+            val += delta;
+            if (val < 0) val = 0;
+            el.value = val;
+            updateMsaLayer();
+        }
+
+        function adjustMsaWarning(delta) {
+            const el = document.getElementById('msaWarningOffset');
+            let val = parseFloat(el.value) || 0;
+            val += delta;
+            if (val < 0) val = 0;
+            el.value = val;
+            updateMsaLayer();
+        }
+
+        btnMissile.onclick = () => {
+            isPlacingMissile = !isPlacingMissile;
+            btnMissile.style.background = isPlacingMissile ? "#ff0000" : "#d63384";
+            btnMissile.innerText = isPlacingMissile ? "📍 點擊地圖" : "🚀 部署飛彈";
+            map.getContainer().style.cursor = isPlacingMissile ? "crosshair" : "";
+        };
+
+        map.on('click', async (e) => {
+            if (!isPlacingMissile) return;
+            isPlacingMissile = false;
+            btnMissile.style.background = "#d63384";
+            btnMissile.innerText = "🚀 部署飛彈";
+            map.getContainer().style.cursor = "";
+
+            // 確保圖層已開啟
+            if (!map.hasLayer(missileLayer)) {
+                map.addLayer(missileLayer);
+            }
+
+            await calculateViewshed(e.latlng);
+        });
+
+        async function calculateViewshed(latlng) {
+            lastMissileLatLng = latlng;
+            const rangeNm = parseFloat(document.getElementById('missile-range').value) || 20;
+            const targetAltFt = parseFloat(document.getElementById('missile-alt').value) || 500;
+            const rangeKm = rangeNm * 1.852;
+
+            document.getElementById('calc-indicator').style.display = 'block';
+            missileLayer.clearLayers();
+
+            // 1. 標示飛彈位置與範圍
+            L.marker(latlng, { icon: L.divIcon({ className: 'missile-icon', html: '🚀', iconSize: [40, 40], iconAnchor: [20, 20] }) }).addTo(missileLayer);
+            L.circle(latlng, { radius: rangeKm * 1000, color: '#FF0000', dashArray: '5, 10', fill: false }).addTo(missileLayer);
+
+            // 2. 取得地形資料 (使用 Zoom 10 的瓦片，範圍涵蓋半徑)
+            // 簡易計算：1度約111km。Zoom 10 瓦片約 0.35度寬。
+            const z = 10;
+            const centerTile = getTileXYZ(latlng.lat, latlng.lng, z);
+            const buffer = 2; // 下載周圍 5x5 瓦片以確保覆蓋
+            const tiles = [];
+
+            // 建立 Canvas 繪製地形高度圖
+            const canvas = document.createElement('canvas');
+            const tileSize = 256;
+            canvas.width = tileSize * (buffer * 2 + 1);
+            canvas.height = tileSize * (buffer * 2 + 1);
+            const ctx = canvas.getContext('2d');
+
+            const promises = [];
+            for (let x = centerTile.x - buffer; x <= centerTile.x + buffer; x++) {
+                for (let y = centerTile.y - buffer; y <= centerTile.y + buffer; y++) {
+                    const p = new Promise((resolve) => {
+                        const img = new Image();
+                        img.crossOrigin = "Anonymous";
+                        img.src = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+                        img.onload = () => {
+                            ctx.drawImage(img, (x - (centerTile.x - buffer)) * tileSize, (y - (centerTile.y - buffer)) * tileSize);
+                            resolve();
+                        };
+                        img.onerror = resolve; // 忽略錯誤
+                    });
+                    promises.push(p);
+                }
+            }
+            await Promise.all(promises);
+
+            // 3. 進行視域分析 (Ray Casting)
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+
+            // 中心點像素座標
+            const tilePos = getTileFraction(latlng.lng, latlng.lat, z);
+            const cx = buffer * tileSize + (tilePos.x % 1) * tileSize;
+            const cy = buffer * tileSize + (tilePos.y % 1) * tileSize;
+
+            // 取得中心點(飛彈)高度
+            const idx = (Math.floor(cy) * canvas.width + Math.floor(cx)) * 4;
+            const missileElev = (data[idx] * 256 + data[idx + 1] + data[idx + 2] / 256) - 32768;
+            const targetAltM = targetAltFt * 0.3048; // 換算公尺
+
+            // --- [精準優化] 計算該緯度下的實際每像素公尺數 (Web Mercator) ---
+            const earthCircumference = 40075016.686; // 赤道周長 (公尺)
+            const metersPerPixel = (earthCircumference * Math.cos(latlng.lat * Math.PI / 180)) / Math.pow(2, z + 8);
+
+            // 根據精準公尺數，計算涵蓋半徑所需的最大像素數量
+            const maxDistPx = (rangeKm * 1000) / metersPerPixel;
+
+            // --- 使用 Web Worker 進行計算以避免凍結主線程 ---
+            const workerCode = `
+                self.onmessage = function(e) {
+                    const { buffer, width, height, cx, cy, missileElev, targetAltM, maxDistPx, metersPerPixel } = e.data;
+                    const data = new Uint8ClampedArray(buffer);
+                    const outData = new Uint8ClampedArray(width * height * 4); // 預設全部為透明(0)
+
+                    for (let angle = 0; angle < 360; angle += 0.25) {
+                        const rad = angle * Math.PI / 180;
+                        const dx = Math.cos(rad); const dy = Math.sin(rad);
+                        let maxSlope = -9999;
+                        
+                        for (let r = 1; r < maxDistPx; r++) {
+                            const px = Math.floor(cx + dx * r);
+                            const py = Math.floor(cy + dy * r);
+                            if (px < 0 || py < 0 || px >= width || py >= height) break;
+                            
+                            const i = (py * width + px) * 4;
+                            const terrainElev = (data[i] * 256 + data[i+1] + data[i+2] / 256) - 32768;
+                            
+                            // [論文等級優化] 根據緯度精準計算當下像素的實際距離
+                            const distM = r * metersPerPixel; 
+                            const curvatureDrop = (distM * distM) / 12742000; // 地球曲率修正
+                            const effectiveTerrainElev = terrainElev - curvatureDrop;
+
+                            const slope = (effectiveTerrainElev - missileElev) / r;
+                            if (slope > maxSlope) maxSlope = slope;
+
+                            const targetSlope = (targetAltM - curvatureDrop - missileElev) / r;
+                            
+                            if (targetSlope > maxSlope && targetAltM > terrainElev) {
+                                outData[i] = 255;   // R
+                                outData[i+1] = 0;   // G
+                                outData[i+2] = 0;   // B
+                                outData[i+3] = 100; // Alpha
+                            }
+                        }
+                    }
+                    // 將結果傳回主線程 (同樣使用記憶體轉移)
+                    self.postMessage({ outBuffer: outData.buffer }, [outData.buffer]);
+                };
+            `;
+
+            const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+            const workerUrl = URL.createObjectURL(workerBlob);
+            const worker = new Worker(workerUrl);
+
+            await new Promise((resolve) => {
+                worker.onmessage = function (e) {
+                    // 接收 Worker 計算完成的數據
+                    const outImgData = new ImageData(new Uint8ClampedArray(e.data.outBuffer), canvas.width, canvas.height);
+                    const outputCanvas = document.createElement('canvas');
+                    outputCanvas.width = canvas.width; outputCanvas.height = canvas.height;
+                    const outCtx = outputCanvas.getContext('2d');
+                    outCtx.putImageData(outImgData, 0, 0);
+
+                    const southWest = pointToLatLng(centerTile.x - buffer, centerTile.y + buffer + 1, z);
+                    const northEast = pointToLatLng(centerTile.x + buffer + 1, centerTile.y - buffer, z);
+                    const bounds = L.latLngBounds(southWest, northEast);
+
+                    L.imageOverlay(outputCanvas.toDataURL(), bounds).addTo(missileLayer);
+                    resolve();
+                };
+
+                // 將資料與 ArrayBuffer 的所有權轉移給 Worker 進行非同步計算
+                worker.postMessage({
+                    buffer: imgData.data.buffer,
+                    width: canvas.width,
+                    height: canvas.height,
+                    cx: cx,
+                    cy: cy,
+                    missileElev: missileElev,
+                    targetAltM: targetAltM,
+                    maxDistPx: maxDistPx,
+                    metersPerPixel: metersPerPixel
+                }, [imgData.data.buffer]);
+            });
+
+            // 清理資源
+            worker.terminate();
+            URL.revokeObjectURL(workerUrl);
+
+            document.getElementById('calc-indicator').style.display = 'none';
+        }
+
+        // 輔助函式
+        function getTileXYZ(lat, lng, z) {
+            const n = Math.pow(2, z);
+            const x = Math.floor((lng + 180) / 360 * n);
+            const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+            return { x, y };
+        }
+        function pointToLatLng(x, y, z) {
+            const n = Math.pow(2, z);
+            const lng = x / n * 360 - 180;
+            const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI;
+            return L.latLng(lat, lng);
+        }
+        function getTileFraction(lng, lat, z) {
+            const n = Math.pow(2, z);
+            const x = (lng + 180) / 360 * n;
+            const y = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n;
+            return { x: x, y: y };
+        }
+    
+
+/* --- SCRIPT BLOCK SPLIT --- */
+
+
+        // --- 計畫側邊欄邏輯 ---
+        const planBtn = document.getElementById('plan-btn');
+        const planPanel = document.getElementById('plan-panel');
+        const planPanelClose = document.getElementById('plan-panel-close');
+        const planPanelBody = document.getElementById('plan-panel-body');
+        const btnConfirmPlan = document.getElementById('btn-confirm-plan');
+
+        planBtn.onclick = () => {
+            renderPlanPanel();
+            planPanel.classList.add('active');
+        };
+
+        planPanelClose.onclick = () => {
+            planPanel.classList.remove('active');
+        };
+
+        function stepPlanValue(id, delta) {
+            const el = document.getElementById(id);
+            if (el) {
+                let val = parseFloat(el.value);
+                if (isNaN(val)) val = 0;
+                let newVal = val + delta;
+                if (newVal < 0) newVal = 0;
+                el.value = newVal;
+            }
+        }
+
+        function renderPlanPanel() {
+            const k = 120;
+
+            planPanelBody.innerHTML = '';
+            if (waypoints.length === 0) {
+                planPanelBody.innerHTML = '<p style="text-align:center; color:#ccc;">尚無航點</p>';
+                return;
+            }
+
+            let html = `
+                <table class="plan-table">
+                    <thead>
+                        <tr>
+                            <th>航點名稱</th>
+                            <th>時間</th>
+                            <th>段油耗(lb)</th>
+                            <th style="width:115px;">高度(ft)</th>
+                            <th style="width:105px;">空速(KT)</th>
+                            <th style="width:110px;">耗油率(lb/h)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            waypoints.forEach((pt, i) => {
+                let defaultTitle = i === 0 ? "SP" : `ACP ${i}`;
+                let name = (markers[i] && markers[i].customName) ? markers[i].customName : defaultTitle;
+
+                let sa = '';
+                if (i < waypoints.length - 1 && segmentLabels[i] && segmentLabels[i].suggestedAltFt) {
+                    sa = segmentLabels[i].suggestedAltFt;
+                }
+
+                let alt = (markers[i] && markers[i].customAlt) ? markers[i].customAlt : sa;
+                let spd = (markers[i] && markers[i].customAirspeed) ? markers[i].customAirspeed : 120;
+                let fuelRate = (markers[i] && markers[i].customFuelRate) ? markers[i].customFuelRate : 800;
+
+                let t = "---", f = "---";
+                if (i < waypoints.length - 1) {
+                    const next = waypoints[i + 1];
+                    const dist = turf.distance([pt.lng, pt.lat], [next.lng, next.lat], { units: 'nauticalmiles' });
+
+                    let calcDist = dist;
+                    if (i === 0) calcDist += 2;
+                    if (i === waypoints.length - 2) calcDist += 2;
+
+                    let currentK = spd ? parseFloat(spd) : 120;
+                    const sec = Math.round((calcDist / currentK) * 3600);
+                    const fuel = (sec / 3600) * parseFloat(fuelRate);
+
+                    t = formatTime(sec);
+                    f = fuel.toFixed(1);
+                }
+
+                html += `
+                    <tr>
+                        <td><input type="text" id="plan-name-${i}" value="${name}"></td>
+                        <td>${t}</td>
+                        <td>${f}</td>
+                        <td>
+                            ${i < waypoints.length - 1 ? `
+                            <div class="stepper">
+                                <button type="button" onclick="stepPlanValue('plan-alt-${i}', -100)">-</button>
+                                <input type="number" id="plan-alt-${i}" value="${alt}">
+                                <button type="button" onclick="stepPlanValue('plan-alt-${i}', 100)">+</button>
+                            </div>` : '---'}
+                        </td>
+                        <td>
+                            ${i < waypoints.length - 1 ? `
+                            <div class="stepper">
+                                <button type="button" onclick="stepPlanValue('plan-spd-${i}', -5)">-</button>
+                                <input type="number" id="plan-spd-${i}" value="${spd}">
+                                <button type="button" onclick="stepPlanValue('plan-spd-${i}', 5)">+</button>
+                            </div>` : '---'}
+                        </td>
+                        <td>
+                            ${i < waypoints.length - 1 ? `
+                            <div class="stepper">
+                                <button type="button" onclick="stepPlanValue('plan-fuelrate-${i}', -10)">-</button>
+                                <input type="number" id="plan-fuelrate-${i}" value="${fuelRate}">
+                                <button type="button" onclick="stepPlanValue('plan-fuelrate-${i}', 10)">+</button>
+                            </div>` : '---'}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            planPanelBody.innerHTML = html;
+        }
+
+        btnConfirmPlan.onclick = () => {
+            waypoints.forEach((pt, i) => {
+                if (!markers[i]) return;
+                const nameInput = document.getElementById(`plan-name-${i}`);
+                if (nameInput) markers[i].customName = nameInput.value;
+
+                if (i < waypoints.length - 1) {
+                    const altInput = document.getElementById(`plan-alt-${i}`);
+                    const spdInput = document.getElementById(`plan-spd-${i}`);
+                    const fuelRateInput = document.getElementById(`plan-fuelrate-${i}`);
+                    if (altInput) markers[i].customAlt = altInput.value;
+                    if (spdInput) markers[i].customAirspeed = spdInput.value;
+                    if (fuelRateInput) markers[i].customFuelRate = fuelRateInput.value;
+                }
+            });
+            updatePlan();
+            planPanel.classList.remove('active');
+        };
+
+        // --- AI 分析功能 ---
+        const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+        const AI_KEY_STORAGE = 'amps_groq_api_key';
+
+        // ↓↓↓ 在引號內填入您的 Groq API Key ↓↓↓
+        const HARDCODED_API_KEY = '';
+        // ↑↑↑ 在引號內填入您的 Groq API Key ↑↑↑
+
+        const aiBtn = document.getElementById('ai-btn');
+        const aiOverlay = document.getElementById('ai-modal-overlay');
+        const aiClose = document.getElementById('ai-modal-close');
+        const aiApiInput = document.getElementById('ai-api-key-input');
+        const aiSaveCb = document.getElementById('ai-save-key-cb');
+        const aiAnalyze = document.getElementById('ai-analyze-btn');
+        const aiLoading = document.getElementById('ai-loading');
+        const aiPlaceholder = document.getElementById('ai-placeholder');
+        const aiResult = document.getElementById('ai-result');
+
+        // 初始化 API Key：優先使用內寫金鑰，否則讀取 localStorage
+        if (HARDCODED_API_KEY) {
+            aiApiInput.value = HARDCODED_API_KEY;
+            // 已內寫金鑰：只隱藏輸入欄列，按鈕仍然可見
+            document.getElementById('ai-modal-api-row').style.display = 'none';
+        } else {
+            const savedKey = localStorage.getItem(AI_KEY_STORAGE);
+            if (savedKey) { aiApiInput.value = savedKey; aiSaveCb.checked = true; }
+        }
+
+        aiBtn.onclick = () => aiOverlay.classList.add('active');
+        aiClose.onclick = () => aiOverlay.classList.remove('active');
+        aiOverlay.addEventListener('click', (e) => { if (e.target === aiOverlay) aiOverlay.classList.remove('active'); });
+
+        aiSaveCb.onchange = () => {
+            if (aiSaveCb.checked && aiApiInput.value) localStorage.setItem(AI_KEY_STORAGE, aiApiInput.value);
+            else localStorage.removeItem(AI_KEY_STORAGE);
+        };
+        aiApiInput.oninput = () => { if (aiSaveCb.checked) localStorage.setItem(AI_KEY_STORAGE, aiApiInput.value); };
+
+        async function buildFlightPlanText() {
+            const taiwanAirspaces = [
+                { name: "RCSS CTR (松山機場管制區)", poly: turf.circle([121.5525, 25.0697], 5, { units: 'nauticalmiles' }) },
+                { name: "RCR11 (博愛特區禁航區)", poly: turf.circle([121.5119, 25.0397], 1, { units: 'nauticalmiles' }) },
+                { name: "RCR14 (龍潭限航區)", poly: turf.circle([121.2400, 24.8500], 2, { units: 'nauticalmiles' }) }
+            ];
+
+            const k = 120;
+            const totalDist = document.getElementById('totalDistance').textContent;
+            const totalTime = document.getElementById('totalTime').textContent;
+            const totalFuel = document.getElementById('totalFuel').textContent;
+            const msaHeightEl = document.getElementById('msaHeight');
+            const msaHeight = msaHeightEl ? msaHeightEl.value : 'N/A';
+
+            let weatherInfo = "無法取得天氣資料";
+            try {
+                if (waypoints.length > 0) {
+                    const startPt = waypoints[0];
+                    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${startPt.lat}&longitude=${startPt.lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=2`);
+                    if (res.ok) {
+                        const wData = await res.json();
+                        const tomorrow = wData.daily;
+                        weatherInfo = `明日預報: 最高溫 ${tomorrow.temperature_2m_max[1]}°C, 最低溫 ${tomorrow.temperature_2m_min[1]}°C, 降水機率 ${tomorrow.precipitation_probability_max[1]}%, 最大風速 ${tomorrow.wind_speed_10m_max[1]} km/h`;
+                    }
+                }
+            } catch (e) { console.error("天氣獲取失敗", e); }
+
+            let wpLines = '';
+            for (let i = 0; i < waypoints.length; i++) {
+                const pt = waypoints[i];
+                let defaultTitle = i === 0 ? 'SP' : `ACP ${i}`;
+                const name = (markers[i] && markers[i].customName) ? markers[i].customName : defaultTitle;
+                const elev = (markers[i] && markers[i].elevText) ? markers[i].elevText : '---';
+                let seg = '';
+                if (i < waypoints.length - 1) {
+                    const next = waypoints[i + 1];
+                    const d = turf.distance([pt.lng, pt.lat], [next.lng, next.lat], { units: 'nauticalmiles' });
+                    const b = (turf.bearing([pt.lng, pt.lat], [next.lng, next.lat]) + 360) % 360;
+                    let calcD = d;
+                    if (i === 0) calcD += 2;
+                    if (i === waypoints.length - 2) calcD += 2;
+                    let currentK = (markers[i] && markers[i].customAirspeed) ? parseFloat(markers[i].customAirspeed) : (k || 120);
+                    let currentFuelRate = (markers[i] && markers[i].customFuelRate) ? parseFloat(markers[i].customFuelRate) : 800;
+                    const s = Math.round((calcD / currentK) * 3600);
+                    const segFuel = ((s / 3600) * currentFuelRate).toFixed(1);
+
+                    let maxElevFt = '未知';
+                    if (typeof getCorridorMaxElevation === 'function') {
+                        const maxElevM = await getCorridorMaxElevation(pt, next);
+                        if (maxElevM !== -Infinity && maxElevM !== -1) {
+                            maxElevFt = Math.round(maxElevM * 3.28084);
+                        }
+                    }
+
+                    let intersectedAirspaces = [];
+                    try {
+                        const segmentLine = turf.lineString([[pt.lng, pt.lat], [next.lng, next.lat]]);
+                        taiwanAirspaces.forEach(airspace => {
+                            if (turf.booleanIntersects(segmentLine, airspace.poly)) {
+                                intersectedAirspaces.push(airspace.name);
+                            }
+                        });
+                    } catch (e) { console.error("空域交集計算失敗", e); }
+                    const airspaceWarning = intersectedAirspaces.length > 0 ? ` / ⚠️ 穿越空域: ${intersectedAirspaces.join(", ")}` : '';
+
+                    seg = ` → 下一段: 航向 ${b.toFixed(0)}° / ${d.toFixed(1)} NM / ${Math.floor(s / 60)}分${s % 60}秒 / 航段最高地形約 ${maxElevFt} ft${airspaceWarning} / 油耗 ${segFuel} lbs`;
+                }
+                const latStr = `${pt.lat >= 0 ? 'N' : 'S'}${Math.abs(pt.lat).toFixed(4)}`;
+                const lngStr = `${pt.lng >= 0 ? 'E' : 'W'}${Math.abs(pt.lng).toFixed(4)}`;
+                wpLines += `  ${name}: ${latStr} ${lngStr}, 地面標高 ${elev} ft${seg}\n`;
+            }
+
+            return [
+                `【飛行計畫摘要】`,
+                `航點數: ${waypoints.length}`,
+                `飛行空速: ${k} 節`,
+                `燃油消耗率: ${f} lbs/hr`,
+                `設定飛行高度 (MSA): ${msaHeight} ft`,
+                `天氣資訊: ${weatherInfo}`,
+                ``,
+                `【航點清單（含地形高度與各段數據）】`,
+                wpLines,
+                `【總計】`,
+                `總航程: ${totalDist}`,
+                `總航時: ${totalTime}`,
+                `總油耗: ${totalFuel}`,
+            ].join('\n');
+        }
+
+        function renderMarkdownLike(text) {
+            return text
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^# (.+)$/gm, '<h3>$1</h3>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/^[\*\-] (.+)$/gm, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+                .replace(/\n{2,}/g, '</p><p>')
+                .replace(/\n/g, '<br>')
+                .replace(/^/, '<p>').replace(/$/, '</p>')
+                .replace(/<p><\/p>/g, '');
+        }
+
+        aiAnalyze.onclick = async () => {
+            const apiKey = aiApiInput.value.trim();
+            if (!apiKey) { alert('請輸入 Groq API Key'); return; }
+            if (waypoints.length < 2) { alert('請先在地圖上設定至少兩個航點'); return; }
+
+            aiPlaceholder.style.display = 'none';
+            aiResult.innerHTML = '';
+            aiLoading.style.display = 'block';
+            aiAnalyze.disabled = true;
+
+            const planText = await buildFlightPlanText();
+            const prompt = `你是一位資深的直升機飛行安全官，熟悉台灣地形、空域、軍事飛行規程與航空安全。
+請用繁體中文，針對以下飛行計畫進行全面的安全分析，並以清楚的章節格式（使用 ## 標題）輸出報告，包含：
+1. 計畫摘要與整體評估 (包含天氣預報分析)
+2. 各航段風險分析（請針對系統在各航段後方標註的「⚠️ 穿越空域」給出確切的飛安警告與無線電通訊建議。注意：請**完全依賴系統標註的空域**進行分析，**絕對不要憑空猜測或捏造系統未列出的空域**！）
+3. 未來一日天氣影響評估（基於提供的天氣資訊，分析對飛行的潛在影響）
+4. 油量安全評估（是否充裕，建議備用量）
+5. 飛行前注意事項與總體建議
+
+以下為飛行計畫資料：
+\`\`\`
+${planText}
+\`\`\``;
+
+            try {
+                const res = await fetch(GROQ_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'llama-3.3-70b-versatile',
+                        messages: [{ role: 'user', content: prompt }],
+                        temperature: 0.7,
+                        max_tokens: 2048
+                    })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error?.message || err.message || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                const text = data.choices?.[0]?.message?.content || '（AI 未返回內容）';
+
+                const totalDist = document.getElementById('totalDistance').textContent;
+                const totalTime = document.getElementById('totalTime').textContent;
+                const totalFuel = document.getElementById('totalFuel').textContent;
+                const k = document.getElementById('airspeed').value;
+
+                aiResult.innerHTML = `
+                    <div class="ai-plan-summary">
+                        <div><div class="si-val">${waypoints.length}</div><div class="si-lbl">航點數</div></div>
+                        <div><div class="si-val">${totalDist}</div><div class="si-lbl">總航程</div></div>
+                        <div><div class="si-val">${totalTime}</div><div class="si-lbl">總航時</div></div>
+                        <div><div class="si-val">${totalFuel}</div><div class="si-lbl">總油耗</div></div>
+                        <div><div class="si-val">${k} kt</div><div class="si-lbl">飛行空速</div></div>
+                        <div><div class="si-val">${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</div><div class="si-lbl">分析時間</div></div>
+                    </div>
+                    <div class="ai-result-content">${renderMarkdownLike(text)}</div>
+                `;
+            } catch (err) {
+                aiResult.innerHTML = `<p class="warn">❌ 分析失敗：${err.message}</p><p style="color:#567;font-size:0.85em;">請確認 API Key 是否正確，以及網路連線是否正常。</p>`;
+            } finally {
+                aiLoading.style.display = 'none';
+                aiAnalyze.disabled = false;
+            }
+        };
+    

@@ -1,0 +1,15 @@
+{
+  "name": "FDR-Alpha Tactical Recorder",
+  "short_name": "FDR-Alpha",
+  "start_url": "recorder.html",
+  "display": "standalone",
+  "background_color": "#0a0c0a",
+  "theme_color": "#ffd700",
+  "icons": [
+    {
+      "src": "https://api.dicebear.com/6.x/shapes/svg?seed=FDR&backgroundColor=ffd700",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}

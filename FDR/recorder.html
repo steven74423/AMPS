@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FDR-Alpha | Recording Mode</title>
+    <link rel="stylesheet" href="css/tactical.css">
+</head>
+<body>
+    <div class="screen-overlay">
+        <header>
+            <div class="mission-info">
+                <div class="mission-id">FDR-ALPHA // RE-01</div>
+                <h1>FLIGHT RECORDER</h1>
+            </div>
+            <div class="gnss-status">
+                <span id="satCount">0</span> SAT
+                <div id="statusLed" class="status-indicator"></div>
+            </div>
+        </header>
+
+        <main>
+            <div class="hud-grid">
+                <div class="hud-item">
+                    <div class="hud-label">Ground Speed</div>
+                    <div class="hud-value"><span id="gsValue">0.0</span><span class="hud-unit">KTS</span></div>
+                </div>
+                <div class="hud-item">
+                    <div class="hud-label">Altitude (MSL)</div>
+                    <div class="hud-value"><span id="altValue">0</span><span class="hud-unit">FT</span></div>
+                </div>
+                <div class="hud-item">
+                    <div class="hud-label">Vertical Speed</div>
+                    <div class="hud-value"><span id="vsiValue">0</span><span class="hud-unit">FPM</span></div>
+                </div>
+                <div class="hud-item">
+                    <div class="hud-label">Heading</div>
+                    <div class="hud-value"><span id="hdgValue">000</span><span class="hud-unit">°</span></div>
+                </div>
+            </div>
+
+            <div class="hud-item" style="margin-top: 10px; text-align: center;">
+                <div class="hud-label">Mission Time</div>
+                <div class="hud-value" id="timerValue">00:00:00</div>
+            </div>
+
+            <div id="signalWarning" style="color: var(--tactical-red); font-size: 0.8rem; margin-top: 15px; display: none; text-align: center;">
+                [ WARNING: LOW GPS SIGNAL - ACCURACY DEGRADED ]
+            </div>
+        </main>
+
+        <button id="recordBtn" class="btn-tactical">Start Recording</button>
+    </div>
+
+    <script src="js/recorder.js"></script>
+</body>
+</html>

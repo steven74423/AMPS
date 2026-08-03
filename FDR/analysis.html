@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FDR-Alpha | Analysis Mode</title>
+    <link rel="stylesheet" href="css/tactical.css">
+    <!-- Chart.js -->
+        <!-- Leaflet JS & CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Cesium JS -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="../js/config.js"></script>
+</head>
+<body>
+    <div class="screen-overlay" style="padding: 10px;">
+        <header style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: flex-end;">
+            <div class="mission-info">
+                <div class="mission-id">FDR-ALPHA // DATA REVIEW</div>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <h1 style="margin: 0; font-size: 1.5rem;">MISSION ANALYSIS</h1>
+                    <button id="importBtn" class="btn-tactical" style="padding: 5px 10px; font-size: 0.7rem; border-width: 1px; margin-top: 0;">IMPORT GPX</button>
+                    <button id="backBtn" class="btn-tactical" style="padding: 5px 10px; font-size: 0.7rem; border-width: 1px; margin-top: 0;">BACK TO PLANNER</button>
+                    <button id="pilotViewBtn" class="btn-tactical" style="padding: 5px 10px; font-size: 0.7rem; border-width: 1px; margin-top: 0; background-color: #222;">PILOT VIEW: OFF</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="analysis-container">
+            <!-- MAP -->
+            <div style="position: relative;">
+
+                <div class="map-section" id="cesiumContainer"></div>
+            </div>
+            
+            <div class="hud-item" style="padding: 5px;">
+                <input type="range" id="mainTimeSlider" class="time-slider" min="0" max="100" value="0" style="width: 100%; accent-color: var(--tactical-gold);">
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--tactical-cyan);">
+                    <span id="startTimeLabel">00:00:00</span>
+                    <span id="currentTimeLabel">SELECT TIME</span>
+                    <span id="endTimeLabel">00:00:00</span>
+                </div>
+                
+                <!-- Playback Controls -->
+                <div id="playbackControls" style="display: none; margin-top: 15px; justify-content: center; align-items: center; gap: 15px;">
+                    <button id="playBtn" class="btn-tactical" style="padding: 10px 25px; font-size: 1rem; border-width: 1px; margin: 0; flex: 1; max-width: 180px;">▶ PLAY</button>
+                    <button id="speedCycleBtn" class="btn-tactical" style="padding: 10px 25px; font-size: 1rem; border-width: 1px; margin: 0; background: var(--tactical-gold); color: #000; flex: 1; max-width: 180px;">SPEED: 1X</button>
+                </div>
+            </div>
+
+            </div>
+        </div>
+
+        <input type="file" id="fileInput" style="display: none;" accept=".gpx">
+    </div>
+
+    <script src="js/filter.js"></script>
+    <script src="js/analysis.js"></script>
+</body>
+</html>

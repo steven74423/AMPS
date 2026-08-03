@@ -1,0 +1,230 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+    /* Military Tactical Palette */
+    --camo-dark: hsl(120, 15%, 10%);
+    --camo-green: hsl(120, 20%, 20%);
+    --camo-light: hsl(120, 10%, 35%);
+    --tactical-gold: hsl(45, 100%, 50%);
+    --tactical-red: hsl(0, 80%, 50%);
+    --tactical-cyan: hsl(180, 100%, 50%);
+    --bg-overlay: hsla(120, 15%, 5%, 0.85);
+    
+    --border-thick: 3px solid var(--tactical-gold);
+    --border-thin: 1px solid hsla(45, 100%, 50%, 0.3);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'JetBrains Mono', monospace;
+    background-color: var(--camo-dark);
+    color: var(--tactical-gold);
+    overflow-x: hidden;
+    /* Digital Camo Background Effect */
+    background-image: 
+        linear-gradient(45deg, var(--camo-green) 25%, transparent 25%), 
+        linear-gradient(-45deg, var(--camo-green) 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, var(--camo-green) 75%), 
+        linear-gradient(-45deg, transparent 75%, var(--camo-green) 75%);
+    background-size: 40px 40px;
+    background-position: 0 0, 0 20px, 20px 20px, 20px 0;
+}
+
+.screen-overlay {
+    min-height: 100vh;
+    background: var(--bg-overlay);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Tactical Headers */
+header {
+    border-bottom: var(--border-thick);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mission-id {
+    font-size: 0.8rem;
+    color: var(--tactical-cyan);
+    text-transform: uppercase;
+}
+
+/* GNSS Status */
+.gnss-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--tactical-red);
+    box-shadow: 0 0 10px var(--tactical-red);
+}
+
+.status-indicator.locked {
+    background: var(--tactical-cyan);
+    box-shadow: 0 0 10px var(--tactical-cyan);
+}
+
+/* HUD Components */
+.hud-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.hud-item {
+    background: hsla(0, 0%, 0%, 0.4);
+    border: var(--border-thin);
+    padding: 15px;
+    position: relative;
+}
+
+.hud-label {
+    font-size: 0.7rem;
+    color: var(--tactical-cyan);
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.hud-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.hud-unit {
+    font-size: 0.8rem;
+    margin-left: 5px;
+}
+
+/* Big Action Button */
+.btn-tactical {
+    background: transparent;
+    border: var(--border-thick);
+    color: var(--tactical-gold);
+    padding: 20px;
+    font-family: inherit;
+    font-size: 1.2rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    margin-top: auto;
+}
+
+.btn-tactical:active {
+    background: var(--tactical-gold);
+    color: var(--camo-dark);
+}
+
+.btn-tactical.recording {
+    border-color: var(--tactical-red);
+    color: var(--tactical-red);
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    50% { opacity: 0.5; }
+}
+
+/* Analysis Layout */
+.analysis-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.map-section {
+    height: 75vh;
+    border: var(--border-thin);
+    background: #000;
+    position: relative;
+    z-index: 1;
+}
+
+.chart-item {
+    border: var(--border-thin);
+    background: hsla(0, 0%, 0%, 0.3);
+    padding: 5px;
+    height: 25vh;
+    position: relative;
+}
+
+.chart-title {
+    position: absolute;
+    top: 5px;
+    left: 10px;
+    color: var(--tactical-cyan);
+    font-size: 0.8rem;
+    z-index: 10;
+    pointer-events: none;
+    font-weight: 700;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.chart-time-label {
+    position: absolute;
+    bottom: 20px;
+    right: 10px;
+    color: var(--tactical-gold);
+    font-size: 0.8rem;
+    z-index: 10;
+    pointer-events: none;
+    font-weight: 700;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.chart-item .time-slider {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    accent-color: var(--tactical-red);
+    z-index: 15;
+    opacity: 0.7;
+    height: 12px;
+    cursor: pointer;
+}
+
+.chart-item .time-slider:hover {
+    opacity: 1;
+}
+
+/* Hidden Tab for Import */
+.side-tab {
+    position: fixed;
+    right: -40px;
+    top: 50%;
+    transform: translateY(-50%) rotate(-90deg);
+    background: var(--tactical-gold);
+    color: var(--camo-dark);
+    padding: 5px 15px;
+    cursor: pointer;
+    font-weight: 700;
+    z-index: 100;
+    transition: right 0.3s;
+}
+
+.side-tab:hover {
+    right: 0;
+}

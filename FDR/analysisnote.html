@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FDR-Alpha 飛行分析器 使用說明</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: linear-gradient(135deg, #0a0e1a 0%, #0d1b2a 50%, #0a1628 100%);
+      min-height: 100vh;
+      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      color: #e0e8f0;
+    }
+    header {
+      background: rgba(0,20,40,0.95);
+      border-bottom: 2px solid #ffaa50;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    header h1 {
+      font-size: 1.3rem;
+      font-weight: 900;
+      letter-spacing: 4px;
+      background: linear-gradient(90deg, #ffaa50, #ffe0a0, #ffaa50);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 3s linear infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 0% center; }
+      100% { background-position: 200% center; }
+    }
+    .back-btn {
+      padding: 8px 20px;
+      background: rgba(255,170,80,0.08);
+      border: 1px solid rgba(255,170,80,0.4);
+      border-radius: 20px;
+      color: #ffaa50;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+    .back-btn:hover { background: rgba(255,170,80,0.2); box-shadow: 0 0 12px rgba(255,170,80,0.3); }
+    .container { max-width: 860px; margin: 0 auto; padding: 40px 24px; }
+    .intro { text-align: center; margin-bottom: 44px; }
+    .intro p { color: #7a9ab5; font-size: 0.95rem; letter-spacing: 1px; margin-top: 8px; }
+    .section {
+      margin-bottom: 28px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,170,80,0.15);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .section:hover { border-color: rgba(255,170,80,0.35); }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 20px;
+      background: rgba(255,170,80,0.05);
+      border-bottom: 1px solid rgba(255,170,80,0.1);
+    }
+    .section-icon { font-size: 1.5rem; }
+    .section-title { font-size: 1.05rem; font-weight: 700; color: #ffaa50; letter-spacing: 2px; }
+    .section-body { padding: 20px; }
+    .item {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .item-label { min-width: 130px; font-size: 0.82rem; font-weight: 700; color: #FFD700; letter-spacing: 1px; padding-top: 2px; }
+    .item-desc { font-size: 0.88rem; color: #b0c8e0; line-height: 1.7; }
+    .tag {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-right: 4px;
+    }
+    .tag-orange { background: rgba(255,170,80,0.2); color: #ffaa50; border: 1px solid rgba(255,170,80,0.4); }
+    .tag-cyan  { background: rgba(0,255,255,0.1);  color: #00FFFF; border: 1px solid rgba(0,255,255,0.3); }
+    .tag-gold  { background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid rgba(255,215,0,0.4); }
+    .tag-blue  { background: rgba(100,180,255,0.2);color: #64b4ff; border: 1px solid rgba(100,180,255,0.4); }
+    .tag-red   { background: rgba(255,80,80,0.2);  color: #ff6060; border: 1px solid rgba(255,80,80,0.4); }
+    .tag-white { background: rgba(255,255,255,0.1);color: #ffffff; border: 1px solid rgba(255,255,255,0.3); }
+    .tip {
+      background: rgba(255,170,80,0.06);
+      border-left: 3px solid #ffaa50;
+      padding: 10px 14px;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.83rem;
+      color: #c8a878;
+      margin-top: 10px;
+      line-height: 1.6;
+    }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .chart-card {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,170,80,0.2);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .chart-card .name { font-size: 0.78rem; color: #ffaa50; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+    .chart-card .range { font-size: 0.75rem; color: #7a9ab5; }
+    .chart-card .color-line {
+      height: 3px;
+      border-radius: 2px;
+      margin-top: 6px;
+    }
+    .flow-steps { display: flex; flex-direction: column; gap: 12px; }
+    .step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num {
+      min-width: 28px;
+      height: 28px;
+      background: rgba(255,170,80,0.15);
+      border: 1px solid rgba(255,170,80,0.4);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #ffaa50;
+      flex-shrink: 0;
+    }
+    .step-text { font-size: 0.88rem; color: #b0c8e0; line-height: 1.7; padding-top: 3px; }
+    .algo-box {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,215,0,0.2);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .algo-box .algo-name { font-size: 0.85rem; font-weight: 700; color: #FFD700; margin-bottom: 6px; }
+    .algo-box .algo-desc { font-size: 0.82rem; color: #90a8b8; line-height: 1.6; }
+    footer {
+      text-align: center;
+      padding: 32px;
+      color: #3a5a75;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      border-top: 1px solid rgba(255,170,80,0.08);
+      margin-top: 20px;
+    }
+    @media (max-width: 600px) {
+      .charts-grid { grid-template-columns: 1fr; }
+      .item { flex-direction: column; gap: 6px; }
+      .item-label { min-width: unset; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📊 飛行分析器 使用說明</h1>
+    <a href="http://stevenkate.synology.me/fdr/analysis.html" class="back-btn">← 返回分析器</a>
+  </header>
+
+  <div class="container">
+    <div class="intro">
+      <p>FDR-Alpha Mission Analysis — 操作說明手冊</p>
+    </div>
+
+    <!-- 1. 系統概述 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">🎯</span>
+        <span class="section-title">系統概述</span>
+      </div>
+      <div class="section-body">
+        <div class="item">
+          <div class="item-label">功能定位</div>
+          <div class="item-desc">FDR-Alpha 飛行分析器是一款任務事後分析（AAR）工具，載入由飛行紀錄器產生的 <span class="tag tag-blue">GPX</span> 檔案後，以互動式地圖、4 條數據曲線圖及時間軸滑桿，還原完整飛行過程。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">主要特色</div>
+          <div class="item-desc">
+            • <span class="tag tag-cyan">2D 戰術地圖</span> 航跡疊加顯示<br>
+            • <span class="tag tag-orange">3D 地形視圖</span> CesiumJS 立體航跡回放<br>
+            • <span class="tag tag-gold">4 項數據圖</span> 地速、垂直速率、高度、航向<br>
+            • <span class="tag tag-blue">進階濾波</span> 動態卡爾曼濾波 + 直升機懸停優化
+          </div>
+        </div>
+        <div class="item">
+          <div class="item-label">資料來源</div>
+          <div class="item-desc">僅支援由 FDR-Alpha 飛行紀錄器匯出的 GPX 檔案（含 speed、vsi、heading 擴充欄位）。標準 GPX 檔案亦可匯入，但部分數據圖可能顯示為零。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 操作流程 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">📂</span>
+        <span class="section-title">操作流程</span>
+      </div>
+      <div class="section-body">
+        <div class="flow-steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text">點擊標題列的 <span class="tag tag-orange">IMPORT GPX</span> 按鈕，選取由飛行紀錄器下載的 <code style="background:rgba(255,255,255,0.08); padding:1px 6px; border-radius:4px; font-family:monospace; color:#FFD700;">FDR_MISSION_*.gpx</code> 檔案。</div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text">系統自動解析 GPX，套用卡爾曼濾波平滑數據，並將航跡顯示於地圖上（青色航線），所有圖表自動填入數據。</div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text">拖曳頁面頂部的 <span class="tag tag-gold">主時間軸滑桿</span>，紅色定位標記在地圖上同步移動，四項圖表上同步顯示對應時間點的數值。</div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-text">亦可直接拖曳各圖表下方的 <span class="tag tag-gold">個別滑桿</span>，效果相同，所有滑桿與地圖位置保持同步。</div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-text">點擊 <span class="tag tag-orange">SWITCH TO 3D</span> 切換至 CesiumJS 立體地形視圖，可旋轉、縮放觀察三維航跡；再次點擊 <span class="tag tag-orange">SWITCH TO 2D</span> 返回平面圖。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 戰術地圖 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">🗺️</span>
+        <span class="section-title">戰術地圖（2D / 3D）</span>
+      </div>
+      <div class="section-body">
+        <div class="item">
+          <div class="item-label">2D 戰術地圖</div>
+          <div class="item-desc">使用 Leaflet + OpenStreetMap 底圖，以 <span class="tag tag-cyan">青色航線</span> 繪製完整飛行軌跡，<span class="tag tag-red">紅色圓點</span> 為當前選取時間點的位置標記。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">懸停偵測顯示</div>
+          <div class="item-desc">當定位標記處於懸停狀態（速度 &lt; 3 KTS）時，標記顏色自動切換為 <span class="tag tag-cyan">青色</span>，便於識別懸停段落。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">3D 地形視圖</div>
+          <div class="item-desc">切換至 3D 模式後，使用 CesiumJS 載入世界地形數據（Cesium World Terrain），以三維座標（經緯度＋高度）繪製立體航跡，可自由旋轉視角觀察山谷穿越、爬升剖面等。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">自動對焦</div>
+          <div class="item-desc">載入 GPX 後，2D 地圖自動調整縮放至包含完整航跡的視野；3D 視圖同樣自動對焦至航跡範圍。</div>
+        </div>
+        <div class="tip">💡 3D 模式需要較佳的網路環境以串流地形資料，首次載入可能需要數秒等待。</div>
+      </div>
+    </div>
+
+    <!-- 4. 數據圖表 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">📈</span>
+        <span class="section-title">四項數據圖表</span>
+      </div>
+      <div class="section-body">
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div class="name">GROUND SPEED</div>
+            <div class="range">範圍：0 – 200 KTS</div>
+            <div class="color-line" style="background: #FFD700;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="name">VERTICAL SPEED</div>
+            <div class="range">範圍：-4000 – +4000 FPM</div>
+            <div class="color-line" style="background: #00FFFF;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="name">ALTITUDE (MSL)</div>
+            <div class="range">範圍：自動調整</div>
+            <div class="color-line" style="background: #ffffff;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="name">HEADING</div>
+            <div class="range">範圍：0 – 360°</div>
+            <div class="color-line" style="background: #00FFFF;"></div>
+          </div>
+        </div>
+        <div class="item" style="margin-top:16px;">
+          <div class="item-label">即時數值</div>
+          <div class="item-desc">每張圖表標題列右側顯示當前選取時間點的即時數值，隨滑桿移動即時更新。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">時間標籤</div>
+          <div class="item-desc">每張圖表下方顯示目前選取的台北時間（GMT+8），方便對照任務時間軸。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">當前點標記</div>
+          <div class="item-desc">選取時間點在圖表上以 <span class="tag tag-red">紅色圓點</span> 標示，其餘數據點不顯示以保持圖表清晰。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. 進階演算法 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">⚙️</span>
+        <span class="section-title">進階訊號處理演算法</span>
+      </div>
+      <div class="section-body">
+        <div class="algo-box">
+          <div class="algo-name">🔷 動態卡爾曼濾波（Kinematic Kalman Filter）</div>
+          <div class="algo-desc">
+            結合 GPS 實測座標與慣性運動預測（速度 × 時間 × 航向），以加權平均修正定位噪訊。<br>
+            • 預測步驟：依地速與航向推算下一位置<br>
+            • 修正步驟：以卡爾曼增益融合 GPS 量測值<br>
+            效果：消除 GPS 跳點，使航跡曲線更平滑，地圖顯示更準確。
+          </div>
+        </div>
+        <div class="algo-box">
+          <div class="algo-name">🔷 直升機懸停優化（Rotorcraft Deadband）</div>
+          <div class="algo-desc">
+            當地速 &lt; 3 KTS 且位移 &lt; 5 公尺時，判定為懸停狀態，鎖定座標至最後有效位置。<br>
+            效果：消除懸停時 GPS 漂移造成的「抖動」假象，使地圖上的懸停點固定不動，並以青色標記區分。
+          </div>
+        </div>
+        <div class="algo-box">
+          <div class="algo-name">🔷 WGS84 轉 MSL 高度修正</div>
+          <div class="algo-desc">
+            GPS 原始高度為 WGS84 橢球面高度（H），透過台灣地區大地起伏近似值（N ≈ -30m）換算為 MSL 平均海拔高度：<br>
+            <code style="color:#FFD700; font-family:monospace;">MSL = H - N</code><br>
+            修正量約 +98 呎，使高度顯示更符合實際飛航高度。
+          </div>
+        </div>
+        <div class="tip">💡 上述演算法在匯入 GPX 時自動套用，無需手動設定。所有處理在瀏覽器本地執行，不上傳任何飛行數據。</div>
+      </div>
+    </div>
+
+    <!-- 6. 時間軸操作 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">⏱️</span>
+        <span class="section-title">時間軸滑桿操作</span>
+      </div>
+      <div class="section-body">
+        <div class="item">
+          <div class="item-label">主時間軸</div>
+          <div class="item-desc">地圖下方的主滑桿控制所有視圖的同步時間點，左端為任務開始時間，右端為任務結束時間。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">圖表個別滑桿</div>
+          <div class="item-desc">每張圖表下方各有一條滑桿，操作任一滑桿均同步更新其他所有滑桿、地圖位置及即時數值。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">時間顯示</div>
+          <div class="item-desc">主時間軸顯示「開始時間 / 目前時間 / 結束時間」，均為台北時間（GMT+8）格式。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. 常見問題 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">❓</span>
+        <span class="section-title">常見問題</span>
+      </div>
+      <div class="section-body">
+        <div class="item">
+          <div class="item-label">圖表數值全為零</div>
+          <div class="item-desc">可能使用了非 FDR-Alpha 產生的 GPX 檔（缺少 speed、vsi、heading 擴充欄位）。航跡仍會顯示，但速度/航向等圖表將無數據。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">3D 模式無法載入</div>
+          <div class="item-desc">請確認網路連線正常（需下載 CesiumJS 及地形資料）。如仍失敗，請查看瀏覽器主控台的錯誤訊息。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">航跡跳點明顯</div>
+          <div class="item-desc">飛行時 GPS 訊號不佳（如飛越山區、高建築遮蔽）可能導致部分位置跳點，卡爾曼濾波會盡力平滑，但嚴重跳點仍可能保留。</div>
+        </div>
+        <div class="item">
+          <div class="item-label">高度數值異常偏高</div>
+          <div class="item-desc">系統對台灣地區套用 +98 呎的 MSL 修正，若使用其他地區的 GPX，MSL 修正值可能不準確，屬正常限制。</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    FDR-Alpha &nbsp;|&nbsp; Mission Analysis &nbsp;|&nbsp; 使用說明 v1.0
+  </footer>
+</body>
+</html>
