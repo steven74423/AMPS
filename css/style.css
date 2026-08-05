@@ -1069,19 +1069,19 @@
         }
 
         #vfr-calibrate-footer {
-            display: flex;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
 
         #vfr-calibrate-footer button {
-            flex: 1;
-            padding: 6px 0;
+            padding: 6px 4px;
             border-radius: 4px;
             border: 1px solid #FFFF00;
             background: #2a2600;
             color: #FFFF00;
             font-weight: bold;
-            font-size: 0.8em;
+            font-size: 0.78em;
             cursor: pointer;
         }
 

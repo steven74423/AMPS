@@ -199,9 +199,10 @@
     <!-- VFR 圖校正面板 -->
     <div id="vfr-calibrate-panel">
         <div id="vfr-calibrate-header">🎯 VFR圖校正模式</div>
-        <div id="vfr-calibrate-body">拖曳地圖上三個黃色標點，把圖片中的海岸線對齊地圖上實際的海岸線（三點分別對應圖片的左上角、右上角、左下角）。校正結果會自動保存，下次更新圖片後不用重新校正。</div>
+        <div id="vfr-calibrate-body">拖曳地圖上三個黃色標點，把圖片中的海岸線對齊地圖上實際的海岸線（三點分別對應圖片的左上角、右上角、左下角）。「儲存」只存在這個瀏覽器；「複製座標」可以把結果貼給 Claude 直接寫回程式碼，所有裝置都會套用。</div>
         <div id="vfr-calibrate-footer">
-            <button id="vfr-calibrate-save">💾 儲存</button>
+            <button id="vfr-calibrate-save">💾 儲存(本機)</button>
+            <button id="vfr-calibrate-export">📋 複製座標</button>
             <button id="vfr-calibrate-reset">↺ 重設</button>
             <button id="vfr-calibrate-cancel">✕ 取消</button>
         </div>

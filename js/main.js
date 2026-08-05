@@ -853,6 +853,11 @@
             document.getElementById('vfr-calibrate-panel').style.display = 'none';
         });
 
+        document.getElementById('vfr-calibrate-export').addEventListener('click', () => {
+            const snippet = JSON.stringify(vfrCalibDraftCorners);
+            window.prompt('複製這串座標(Ctrl+C)，貼給 Claude 說「幫我把這個寫回 VFR_DEFAULT_CORNERS」，他會直接改程式碼並推上 GitHub：', snippet);
+        });
+
         document.getElementById('vfr-calibrate-reset').addEventListener('click', () => {
             vfrCalibDraftCorners = JSON.parse(JSON.stringify(VFR_DEFAULT_CORNERS));
             vfrOverlay.setCorners(vfrCalibDraftCorners);
