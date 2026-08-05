@@ -1,3 +1,10 @@
+// js/config.js 未被提交到 git，在沒有該檔案的環境(如剛 clone 下來或部署後)
+// APP_CONFIG 會是 undefined，避免整支 script 因此中斷，改為降級為停用 3D 地形 token
+if (typeof APP_CONFIG === 'undefined') {
+    console.warn('js/config.js 不存在：Cesium 3D 地形 token 未設定，3D 預覽將無法載入地形資料。');
+    window.APP_CONFIG = { LOGIN_PASSWORD: null, OPENAIP_API_KEY: null, CESIUM_ION_TOKEN: null };
+}
+
 let activeThreatData = null;
 /**
  * FDR-Alpha Analysis Logic
@@ -94,7 +101,11 @@ function drawThreatDome(threatData) {
 function initCesium() {
     if (viewer || typeof Cesium === 'undefined') return;
 
-    Cesium.Ion.defaultAccessToken = APP_CONFIG.CESIUM_ION_TOKEN;
+    if (APP_CONFIG.CESIUM_ION_TOKEN) {
+        Cesium.Ion.defaultAccessToken = APP_CONFIG.CESIUM_ION_TOKEN;
+    } else {
+        console.warn('未設定 CESIUM_ION_TOKEN，3D 地形資料(World Terrain)可能無法載入。');
+    }
 
     try {
         viewer = new Cesium.Viewer('cesiumContainer', {

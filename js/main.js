@@ -1,4 +1,11 @@
-// --- 新增：禁用右鍵選單 ---
+// --- 設定檔防呆：js/config.js 未被提交到 git，在沒有該檔案的環境(如剛 clone 下來或部署後)
+        // APP_CONFIG 會是 undefined，避免整支 script 因此中斷，改為降級為停用相關功能 ---
+        if (typeof APP_CONFIG === 'undefined') {
+            console.warn('js/config.js 不存在：登入密碼保護、OpenAIP 圖層、3D 地形 token 相關功能將被停用。請複製 js/config.example.js 為 js/config.js 並填入你的設定值。');
+            window.APP_CONFIG = { LOGIN_PASSWORD: null, OPENAIP_API_KEY: null, CESIUM_ION_TOKEN: null };
+        }
+
+        // --- 新增：禁用右鍵選單 ---
         document.addEventListener('contextmenu', event => event.preventDefault());
 
         // --- 1. 初始化與驗證 ---
@@ -554,6 +561,10 @@
         const OPENAIP_API_KEY = APP_CONFIG.OPENAIP_API_KEY;
 
         async function fetchOpenAipData() {
+            if (!OPENAIP_API_KEY) {
+                console.warn('未設定 OPENAIP_API_KEY，跳過機場與助導航資料下載。');
+                return;
+            }
             try {
                 // 並發抓取台灣(TW)的機場與導航台資料
                 const [airportsRes, navaidsRes] = await Promise.all([
