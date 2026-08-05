@@ -553,8 +553,82 @@
         }
         map.on('moveend', () => { if (isPowerLayerActive && (typeof waypoints === 'undefined' || waypoints.length === 0)) loadPowerLines(); });
 
-        // --- 6. VFR整合圖層控制 ---
-        const vfrOverlay = L.imageOverlay('vfr_chart.png', [[25.99, 119.08], [21.56, 122.48]], { opacity: 0.65 });
+        // --- 6. VFR整合圖層控制 (支援旋轉/歪斜校正，不受限於單純矩形縮放) ---
+        // 用「左上/右上/左下」三個對應點做仿射變換，讓圖片可以旋轉、傾斜貼合實際地圖，
+        // 校正結果存在 localStorage，換圖後(檔名/內容變了但裁切範圍不變時)不用重新校正
+        const VfrRotatedOverlay = L.Layer.extend({
+            options: { pane: 'overlayPane' },
+            initialize: function (url, corners, options) {
+                this._url = url;
+                this._corners = corners; // { topleft:[lat,lng], topright:[lat,lng], bottomleft:[lat,lng] }
+                L.setOptions(this, options);
+            },
+            onAdd: function (map) {
+                this._map = map;
+                if (!this._image) this._initImage();
+                this.getPane().appendChild(this._image);
+                this._reset();
+            },
+            onRemove: function () {
+                L.DomUtil.remove(this._image);
+            },
+            getEvents: function () {
+                return { zoom: this._reset, viewreset: this._reset, move: this._reset };
+            },
+            _initImage: function () {
+                const img = this._image = L.DomUtil.create('img', 'leaflet-image-layer');
+                img.style.transformOrigin = '0 0';
+                img.style.position = 'absolute';
+                img.style.pointerEvents = 'none';
+                img.style.maxWidth = 'none';
+                img.style.opacity = this.options.opacity != null ? this.options.opacity : 1;
+                img.onload = () => {
+                    this._naturalW = img.naturalWidth;
+                    this._naturalH = img.naturalHeight;
+                    this._reset();
+                };
+                img.src = this._url;
+            },
+            _reset: function () {
+                if (!this._naturalW || !this._map || !this._image) return;
+                const tl = this._map.latLngToLayerPoint(this._corners.topleft);
+                const tr = this._map.latLngToLayerPoint(this._corners.topright);
+                const bl = this._map.latLngToLayerPoint(this._corners.bottomleft);
+                const e = tl.x, f = tl.y;
+                const a = (tr.x - e) / this._naturalW, b = (tr.y - f) / this._naturalW;
+                const c = (bl.x - e) / this._naturalH, d = (bl.y - f) / this._naturalH;
+                this._image.style.width = this._naturalW + 'px';
+                this._image.style.height = this._naturalH + 'px';
+                this._image.style.transform = `matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f})`;
+            },
+            setCorners: function (corners) {
+                this._corners = corners;
+                this._reset();
+            },
+            getCorners: function () {
+                return this._corners;
+            },
+            setOpacity: function (v) {
+                this.options.opacity = v;
+                if (this._image) this._image.style.opacity = v;
+            }
+        });
+
+        const VFR_CALIBRATION_KEY = 'vfrChartCalibration';
+        const VFR_DEFAULT_CORNERS = {
+            topleft: [25.99, 119.08],
+            topright: [25.99, 122.48],
+            bottomleft: [21.56, 119.08]
+        };
+        function loadVfrCorners() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(VFR_CALIBRATION_KEY));
+                if (saved && saved.topleft && saved.topright && saved.bottomleft) return saved;
+            } catch (e) { /* 忽略壞資料，改用預設值 */ }
+            return VFR_DEFAULT_CORNERS;
+        }
+
+        const vfrOverlay = new VfrRotatedOverlay('vfr_chart.png', loadVfrCorners(), { opacity: 0.65 });
         const aipLayer = L.layerGroup();
 
         // --- 替換：改用 OpenAIP 動態抓取 RCAA 範圍內資料 ---
@@ -703,12 +777,90 @@
             if (e.name === "🚨 MSA地障警示") { document.getElementById('ctrl-msa').style.display = 'flex'; document.getElementById('msa-legend').style.display = 'flex'; }
             if (e.name === "🛡️ 防空隱蔽分析") { document.getElementById('ctrl-missile').style.display = 'flex'; }
             if (e.name === "🚧 限制空域") { document.getElementById('restricted-area-panel').style.display = 'flex'; }
+            if (e.name === "📄 VFR目視航路") { document.getElementById('ctrl-vfr').style.display = 'flex'; }
         });
         map.on('overlayremove', e => {
             if (e.name === "🌑 夜間陰影區") { updateMoonInfo(); document.getElementById('ctrl-nvg').style.display = 'none'; }
             if (e.name === "🚨 MSA地障警示") { document.getElementById('ctrl-msa').style.display = 'none'; document.getElementById('msa-legend').style.display = 'none'; }
             if (e.name === "🛡️ 防空隱蔽分析") { document.getElementById('ctrl-missile').style.display = 'none'; }
             if (e.name === "🚧 限制空域") { document.getElementById('restricted-area-panel').style.display = 'none'; }
+            if (e.name === "📄 VFR目視航路") {
+                document.getElementById('ctrl-vfr').style.display = 'none';
+                if (vfrCalibrating) exitVfrCalibration(true); // 圖層被關掉時視同放棄未儲存的校正草稿
+            }
+        });
+
+        // --- VFR 圖校正模式 ---
+        let vfrCalibrating = false;
+        let vfrCalibMarkers = null; // {topleft, topright, bottomleft} L.Marker
+        let vfrCalibDraftCorners = null;
+        let vfrCalibSavedOpacity = 0.65;
+
+        function makeVfrHandle(latlng, labelText) {
+            const marker = L.marker(latlng, {
+                draggable: true,
+                icon: L.divIcon({ className: 'vfr-calib-handle', html: '📍', iconSize: [30, 30], iconAnchor: [15, 28] })
+            });
+            marker.bindTooltip(labelText, { permanent: true, direction: 'top', offset: [0, -28] });
+            return marker;
+        }
+
+        function enterVfrCalibration() {
+            if (vfrCalibrating) return;
+            vfrCalibrating = true;
+            vfrCalibSavedOpacity = vfrOverlay.options.opacity != null ? vfrOverlay.options.opacity : 0.65;
+            vfrOverlay.setOpacity(0.85);
+            vfrCalibDraftCorners = JSON.parse(JSON.stringify(vfrOverlay.getCorners()));
+
+            vfrCalibMarkers = {
+                topleft: makeVfrHandle(vfrCalibDraftCorners.topleft, '左上'),
+                topright: makeVfrHandle(vfrCalibDraftCorners.topright, '右上'),
+                bottomleft: makeVfrHandle(vfrCalibDraftCorners.bottomleft, '左下')
+            };
+            Object.keys(vfrCalibMarkers).forEach(key => {
+                const m = vfrCalibMarkers[key];
+                m.addTo(map);
+                m.on('drag', () => {
+                    vfrCalibDraftCorners[key] = [m.getLatLng().lat, m.getLatLng().lng];
+                    vfrOverlay.setCorners(vfrCalibDraftCorners);
+                });
+            });
+
+            document.getElementById('vfr-calibrate-panel').style.display = 'flex';
+        }
+
+        function exitVfrCalibration(restoreOriginal) {
+            if (!vfrCalibrating) return;
+            vfrCalibrating = false;
+            if (vfrCalibMarkers) {
+                Object.values(vfrCalibMarkers).forEach(m => map.removeLayer(m));
+                vfrCalibMarkers = null;
+            }
+            if (restoreOriginal) {
+                vfrOverlay.setCorners(loadVfrCorners());
+            }
+            vfrOverlay.setOpacity(vfrCalibSavedOpacity);
+            document.getElementById('vfr-calibrate-panel').style.display = 'none';
+        }
+
+        document.getElementById('btn-vfr-calibrate').addEventListener('click', enterVfrCalibration);
+
+        document.getElementById('vfr-calibrate-save').addEventListener('click', () => {
+            localStorage.setItem(VFR_CALIBRATION_KEY, JSON.stringify(vfrCalibDraftCorners));
+            vfrCalibrating = false; // 避免 exitVfrCalibration 誤判為取消而還原
+            if (vfrCalibMarkers) { Object.values(vfrCalibMarkers).forEach(m => map.removeLayer(m)); vfrCalibMarkers = null; }
+            vfrOverlay.setOpacity(vfrCalibSavedOpacity);
+            document.getElementById('vfr-calibrate-panel').style.display = 'none';
+        });
+
+        document.getElementById('vfr-calibrate-reset').addEventListener('click', () => {
+            vfrCalibDraftCorners = JSON.parse(JSON.stringify(VFR_DEFAULT_CORNERS));
+            vfrOverlay.setCorners(vfrCalibDraftCorners);
+            Object.keys(vfrCalibMarkers).forEach(key => vfrCalibMarkers[key].setLatLng(vfrCalibDraftCorners[key]));
+        });
+
+        document.getElementById('vfr-calibrate-cancel').addEventListener('click', () => {
+            exitVfrCalibration(true);
         });
 
         // --- 7. 雷達播放器 ---

@@ -1037,3 +1037,65 @@
         #btn-confirm-plan:hover, #export-btn:hover {
             background: #00cccc;
         }
+
+        /* --- VFR 圖校正面板 --- */
+        #vfr-calibrate-panel {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(90vw, 380px);
+            background: rgba(20, 18, 0, 0.92);
+            border: 1px solid #FFFF00;
+            border-radius: 6px;
+            box-shadow: 0 0 12px rgba(255, 255, 0, 0.35);
+            z-index: 3000;
+            display: none;
+            flex-direction: column;
+            padding: 10px 12px;
+            gap: 8px;
+        }
+
+        #vfr-calibrate-header {
+            color: #FFFF00;
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+
+        #vfr-calibrate-body {
+            color: #ddd;
+            font-size: 0.78em;
+            line-height: 1.5;
+        }
+
+        #vfr-calibrate-footer {
+            display: flex;
+            gap: 8px;
+        }
+
+        #vfr-calibrate-footer button {
+            flex: 1;
+            padding: 6px 0;
+            border-radius: 4px;
+            border: 1px solid #FFFF00;
+            background: #2a2600;
+            color: #FFFF00;
+            font-weight: bold;
+            font-size: 0.8em;
+            cursor: pointer;
+        }
+
+        #vfr-calibrate-footer button:hover {
+            background: #FFFF00;
+            color: #000;
+        }
+
+        #vfr-calibrate-cancel {
+            border-color: #888 !important;
+            color: #ccc !important;
+        }
+
+        .vfr-calib-handle {
+            font-size: 1.6em;
+            text-shadow: 2px 2px 3px #000;
+        }
