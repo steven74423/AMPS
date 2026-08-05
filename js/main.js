@@ -615,20 +615,26 @@
         });
 
         const VFR_CALIBRATION_KEY = 'vfrChartCalibration';
-        const VFR_DEFAULT_CORNERS = {
-            topleft: [25.99, 119.08],
-            topright: [25.99, 122.48],
-            bottomleft: [21.56, 119.08]
+        const VFR_DEFAULT_CONFIG = {
+            corners: {
+                topleft: [25.99, 119.08],
+                topright: [25.99, 122.48],
+                bottomleft: [21.56, 119.08]
+            },
+            opacity: 0.65
         };
-        function loadVfrCorners() {
+        function loadVfrConfig() {
             try {
                 const saved = JSON.parse(localStorage.getItem(VFR_CALIBRATION_KEY));
-                if (saved && saved.topleft && saved.topright && saved.bottomleft) return saved;
+                if (saved && saved.corners && saved.corners.topleft && saved.corners.topright && saved.corners.bottomleft) {
+                    return { corners: saved.corners, opacity: saved.opacity != null ? saved.opacity : VFR_DEFAULT_CONFIG.opacity };
+                }
             } catch (e) { /* 忽略壞資料，改用預設值 */ }
-            return VFR_DEFAULT_CORNERS;
+            return JSON.parse(JSON.stringify(VFR_DEFAULT_CONFIG));
         }
 
-        const vfrOverlay = new VfrRotatedOverlay('vfr_chart.png', loadVfrCorners(), { opacity: 0.65 });
+        let vfrSavedConfig = loadVfrConfig();
+        const vfrOverlay = new VfrRotatedOverlay('vfr_chart.png', vfrSavedConfig.corners, { opacity: vfrSavedConfig.opacity });
         const aipLayer = L.layerGroup();
 
         // --- 替換：改用 OpenAIP 動態抓取 RCAA 範圍內資料 ---
@@ -790,11 +796,14 @@
             }
         });
 
-        // --- VFR 圖校正模式 ---
+        // --- VFR 圖校正模式 (按鈕整合在底部工具列，不再用獨立對話框) ---
         let vfrCalibrating = false;
         let vfrCalibMarkers = null; // {topleft, topright, bottomleft} L.Marker
-        let vfrCalibDraftCorners = null;
-        let vfrCalibSavedOpacity = 0.65;
+        let vfrDraftConfig = null; // { corners, opacity } 校正中的暫存值
+
+        const vfrCalibBtn = document.getElementById('btn-vfr-calibrate');
+        const vfrCalibActions = document.getElementById('vfr-calib-actions');
+        const vfrOpacitySlider = document.getElementById('vfr-opacity-slider');
 
         function makeVfrHandle(latlng, labelText) {
             const marker = L.marker(latlng, {
@@ -805,28 +814,33 @@
             return marker;
         }
 
+        function refreshVfrCalibMarkers() {
+            if (!vfrCalibMarkers) return;
+            Object.keys(vfrCalibMarkers).forEach(key => vfrCalibMarkers[key].setLatLng(vfrDraftConfig.corners[key]));
+        }
+
         function enterVfrCalibration() {
             if (vfrCalibrating) return;
             vfrCalibrating = true;
-            vfrCalibSavedOpacity = vfrOverlay.options.opacity != null ? vfrOverlay.options.opacity : 0.65;
-            vfrOverlay.setOpacity(0.85);
-            vfrCalibDraftCorners = JSON.parse(JSON.stringify(vfrOverlay.getCorners()));
+            vfrDraftConfig = JSON.parse(JSON.stringify(vfrSavedConfig));
 
             vfrCalibMarkers = {
-                topleft: makeVfrHandle(vfrCalibDraftCorners.topleft, '左上'),
-                topright: makeVfrHandle(vfrCalibDraftCorners.topright, '右上'),
-                bottomleft: makeVfrHandle(vfrCalibDraftCorners.bottomleft, '左下')
+                topleft: makeVfrHandle(vfrDraftConfig.corners.topleft, '左上'),
+                topright: makeVfrHandle(vfrDraftConfig.corners.topright, '右上'),
+                bottomleft: makeVfrHandle(vfrDraftConfig.corners.bottomleft, '左下')
             };
             Object.keys(vfrCalibMarkers).forEach(key => {
                 const m = vfrCalibMarkers[key];
                 m.addTo(map);
                 m.on('drag', () => {
-                    vfrCalibDraftCorners[key] = [m.getLatLng().lat, m.getLatLng().lng];
-                    vfrOverlay.setCorners(vfrCalibDraftCorners);
+                    vfrDraftConfig.corners[key] = [m.getLatLng().lat, m.getLatLng().lng];
+                    vfrOverlay.setCorners(vfrDraftConfig.corners);
                 });
             });
 
-            document.getElementById('vfr-calibrate-panel').style.display = 'flex';
+            vfrOpacitySlider.value = Math.round(vfrDraftConfig.opacity * 100);
+            vfrCalibBtn.style.display = 'none';
+            vfrCalibActions.style.display = 'flex';
         }
 
         function exitVfrCalibration(restoreOriginal) {
@@ -837,31 +851,38 @@
                 vfrCalibMarkers = null;
             }
             if (restoreOriginal) {
-                vfrOverlay.setCorners(loadVfrCorners());
+                vfrOverlay.setCorners(vfrSavedConfig.corners);
+                vfrOverlay.setOpacity(vfrSavedConfig.opacity);
             }
-            vfrOverlay.setOpacity(vfrCalibSavedOpacity);
-            document.getElementById('vfr-calibrate-panel').style.display = 'none';
+            vfrCalibBtn.style.display = '';
+            vfrCalibActions.style.display = 'none';
         }
 
-        document.getElementById('btn-vfr-calibrate').addEventListener('click', enterVfrCalibration);
+        vfrCalibBtn.addEventListener('click', enterVfrCalibration);
+
+        vfrOpacitySlider.addEventListener('input', (e) => {
+            const v = parseInt(e.target.value, 10) / 100;
+            vfrOverlay.setOpacity(v);
+            if (vfrCalibrating) vfrDraftConfig.opacity = v;
+        });
 
         document.getElementById('vfr-calibrate-save').addEventListener('click', () => {
-            localStorage.setItem(VFR_CALIBRATION_KEY, JSON.stringify(vfrCalibDraftCorners));
-            vfrCalibrating = false; // 避免 exitVfrCalibration 誤判為取消而還原
-            if (vfrCalibMarkers) { Object.values(vfrCalibMarkers).forEach(m => map.removeLayer(m)); vfrCalibMarkers = null; }
-            vfrOverlay.setOpacity(vfrCalibSavedOpacity);
-            document.getElementById('vfr-calibrate-panel').style.display = 'none';
+            vfrSavedConfig = JSON.parse(JSON.stringify(vfrDraftConfig));
+            localStorage.setItem(VFR_CALIBRATION_KEY, JSON.stringify(vfrSavedConfig));
+            exitVfrCalibration(false);
         });
 
         document.getElementById('vfr-calibrate-export').addEventListener('click', () => {
-            const snippet = JSON.stringify(vfrCalibDraftCorners);
-            window.prompt('複製這串座標(Ctrl+C)，貼給 Claude 說「幫我把這個寫回 VFR_DEFAULT_CORNERS」，他會直接改程式碼並推上 GitHub：', snippet);
+            const snippet = JSON.stringify(vfrDraftConfig);
+            window.prompt('複製這串設定(Ctrl+C)，貼給 Claude 說「幫我把這個寫回 VFR_DEFAULT_CONFIG」，他會直接改程式碼並推上 GitHub：', snippet);
         });
 
         document.getElementById('vfr-calibrate-reset').addEventListener('click', () => {
-            vfrCalibDraftCorners = JSON.parse(JSON.stringify(VFR_DEFAULT_CORNERS));
-            vfrOverlay.setCorners(vfrCalibDraftCorners);
-            Object.keys(vfrCalibMarkers).forEach(key => vfrCalibMarkers[key].setLatLng(vfrCalibDraftCorners[key]));
+            vfrDraftConfig = JSON.parse(JSON.stringify(VFR_DEFAULT_CONFIG));
+            vfrOverlay.setCorners(vfrDraftConfig.corners);
+            vfrOverlay.setOpacity(vfrDraftConfig.opacity);
+            vfrOpacitySlider.value = Math.round(vfrDraftConfig.opacity * 100);
+            refreshVfrCalibMarkers();
         });
 
         document.getElementById('vfr-calibrate-cancel').addEventListener('click', () => {

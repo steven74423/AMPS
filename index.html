@@ -185,6 +185,15 @@
             <button id="btn-vfr-calibrate" class="btn"
                 style="background: linear-gradient(135deg,#5f5f00,#3f3f00); border: 1px solid #FFFF00; color:#FFFF00;">🎯
                 校正VFR圖位置</button>
+
+            <div id="vfr-calib-actions" style="display:none; align-items:center; gap:6px; width:100%;">
+                <span style="font-size:0.75em; color:#FFFF00; white-space:nowrap;">透明度</span>
+                <input type="range" id="vfr-opacity-slider" min="0" max="100" value="65" style="flex:1; min-width:30px;">
+                <button id="vfr-calibrate-save" class="btn" title="儲存(本機)" style="padding:0 8px; background:#2a2600; border:1px solid #FFFF00; color:#FFFF00;">💾</button>
+                <button id="vfr-calibrate-export" class="btn" title="複製座標(寫回程式碼)" style="padding:0 8px; background:#2a2600; border:1px solid #FFFF00; color:#FFFF00;">📋</button>
+                <button id="vfr-calibrate-reset" class="btn" title="重設" style="padding:0 8px; background:#2a2600; border:1px solid #FFFF00; color:#FFFF00;">↺</button>
+                <button id="vfr-calibrate-cancel" class="btn" title="取消" style="padding:0 8px; background:#333; border:1px solid #888; color:#ccc;">✕</button>
+            </div>
         </div>
 
         <div class="control-row">
@@ -193,18 +202,6 @@
                 <div class="summary-box">總航時 <span id="totalTime">00:00</span></div>
                 <div class="summary-box">總油耗 <span id="totalFuel">0.0</span></div>
             </div>
-        </div>
-    </div>
-
-    <!-- VFR 圖校正面板 -->
-    <div id="vfr-calibrate-panel">
-        <div id="vfr-calibrate-header">🎯 VFR圖校正模式</div>
-        <div id="vfr-calibrate-body">拖曳地圖上三個黃色標點，把圖片中的海岸線對齊地圖上實際的海岸線（三點分別對應圖片的左上角、右上角、左下角）。「儲存」只存在這個瀏覽器；「複製座標」可以把結果貼給 Claude 直接寫回程式碼，所有裝置都會套用。</div>
-        <div id="vfr-calibrate-footer">
-            <button id="vfr-calibrate-save">💾 儲存(本機)</button>
-            <button id="vfr-calibrate-export">📋 複製座標</button>
-            <button id="vfr-calibrate-reset">↺ 重設</button>
-            <button id="vfr-calibrate-cancel">✕ 取消</button>
         </div>
     </div>
 
