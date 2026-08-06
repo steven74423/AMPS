@@ -1420,10 +1420,11 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 const name = markers[i] && markers[i].customName ? markers[i].customName : defaultTitle;
                 
                 let altFt = 0;
-                if (i === 0) {
-                    altFt = (markers[0] && markers[0].elevText && !isNaN(parseFloat(markers[0].elevText))) ? parseFloat(markers[0].elevText) : 0;
+                if (i === 0 || i === waypoints.length - 1) {
+                    // SP(起點)及最後一點：高度設為該點標高(地面高度)，符合起降時位於地面的實際情況
+                    altFt = (markers[i] && markers[i].elevText && !isNaN(parseFloat(markers[i].elevText))) ? parseFloat(markers[i].elevText) : 0;
                 } else {
-                    altFt = (markers[i] && markers[i].customAlt) ? parseFloat(markers[i].customAlt) : 
+                    altFt = (markers[i] && markers[i].customAlt) ? parseFloat(markers[i].customAlt) :
                             (segmentLabels[i-1] && segmentLabels[i-1].suggestedAltFt ? segmentLabels[i-1].suggestedAltFt : 0);
                 }
                 const elev = altFt / 3.28084;
@@ -1456,7 +1457,10 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 const eleA = eleA_ft / 3.28084;
 
                 let eleB_ft = 0;
-                if (markers[i+1] && markers[i+1].customAlt) {
+                if (i + 1 === waypoints.length - 1) {
+                    // 這段的終點是最後一個航點：高度設為該點標高
+                    eleB_ft = (markers[i+1] && markers[i+1].elevText && !isNaN(parseFloat(markers[i+1].elevText))) ? parseFloat(markers[i+1].elevText) : 0;
+                } else if (markers[i+1] && markers[i+1].customAlt) {
                     eleB_ft = parseFloat(markers[i+1].customAlt);
                 } else {
                     eleB_ft = (segmentLabels[i] && segmentLabels[i].suggestedAltFt) ? segmentLabels[i].suggestedAltFt : eleA_ft;
@@ -1490,11 +1494,10 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 currentTimeMs += totalDist * msPerKm;
             }
             
-            // Add the very last point
+            // Add the very last point (高度設為該點標高，與 SP 起點相同邏輯)
             const lastPt = waypoints[waypoints.length - 1];
             const lastIdx = waypoints.length - 1;
-            const lastEle_ft = (markers[lastIdx] && markers[lastIdx].customAlt) ? parseFloat(markers[lastIdx].customAlt) : 
-                               (segmentLabels[lastIdx-1] && segmentLabels[lastIdx-1].suggestedAltFt ? segmentLabels[lastIdx-1].suggestedAltFt : 0);
+            const lastEle_ft = (markers[lastIdx] && markers[lastIdx].elevText && !isNaN(parseFloat(markers[lastIdx].elevText))) ? parseFloat(markers[lastIdx].elevText) : 0;
             const lastEle = lastEle_ft / 3.28084;
             
             const timeStrLast = new Date(currentTimeMs).toISOString();
