@@ -925,6 +925,86 @@
         // 呼叫抓取函式
         fetchOpenAipData();
 
+        // --- 機場天氣 (METAR，資料源: NOAA Aviation Weather Center，免金鑰) ---
+        const WEATHER_ICAO_CODES = ['RCTP', 'RCSS', 'RCKH', 'RCMQ', 'RCFN', 'RCNN', 'RCYU', 'RCQC', 'RCGI', 'RCFG', 'RCMT'];
+        const weatherLayer = L.layerGroup();
+        const weatherMarkers = {}; // icao -> L.Marker
+        let weatherRefreshTimer = null;
+
+        function flightCategoryColor(cat) {
+            switch (cat) {
+                case 'VFR': return '#00CC44';
+                case 'MVFR': return '#0080FF';
+                case 'IFR': return '#FF3B30';
+                case 'LIFR': return '#FF00FF';
+                default: return '#888888';
+            }
+        }
+
+        function buildWeatherIcon(icao, color) {
+            return L.divIcon({
+                className: 'weather-icon',
+                html: `<div class="weather-badge" style="background:${color};">${icao}</div>`,
+                iconSize: [54, 22],
+                iconAnchor: [27, 11]
+            });
+        }
+
+        function buildWeatherPopup(m) {
+            const cat = m.fltCat || '?';
+            const color = flightCategoryColor(m.fltCat);
+            let html = `<div style="color:#333; line-height:1.6; min-width:210px;">`;
+            html += `<div style="font-weight:bold; font-size:1.05em; display:flex; align-items:center; gap:6px;">`;
+            html += `<span style="color:#0066CC;">🌤️ ${m.icaoId}${m.name ? ' - ' + m.name : ''}</span>`;
+            html += `<span style="font-size:0.72em; padding:1px 6px; border-radius:3px; background:${color}; color:#fff;">${cat}</span>`;
+            html += `</div><hr style="margin:5px 0; border:0; border-top:1px solid #ccc;">`;
+
+            if (m.temp != null) html += `🌡️ <b>溫度/露點：</b> ${m.temp}°C / ${m.dewp != null ? m.dewp + '°C' : '-'}<br>`;
+            if (m.wdir != null || m.wspd != null) {
+                const dir = (m.wdir === 0 || m.wdir === 'VRB') ? 'VRB' : `${m.wdir}°`;
+                html += `💨 <b>風向風速：</b> ${dir} / ${m.wspd ?? '-'} kt${m.wgst ? ` (陣風 ${m.wgst} kt)` : ''}<br>`;
+            }
+            if (m.visib != null) html += `👁️ <b>能見度：</b> ${m.visib} SM<br>`;
+            if (m.altim != null) html += `📊 <b>高度撥定值：</b> ${m.altim} hPa<br>`;
+            if (m.wxString) html += `☔ <b>天氣現象：</b> ${m.wxString}<br>`;
+            if (m.clouds && m.clouds.length) {
+                const cloudsStr = m.clouds.map(c => `${c.cover}${c.base != null ? ' ' + c.base + 'ft' : ''}`).join(', ');
+                html += `☁️ <b>雲況：</b> ${cloudsStr}<br>`;
+            }
+            html += `<div style="margin-top:6px; padding:5px; background:#f0f0f0; border-radius:4px; font-size:0.78em; font-family:monospace; word-break:break-all; color:#333;">${m.rawOb || ''}</div>`;
+            if (m.reportTime) html += `<div style="margin-top:4px; font-size:0.72em; color:#888;">觀測時間：${m.reportTime} UTC</div>`;
+            html += `</div>`;
+            return html;
+        }
+
+        async function loadAirportWeather() {
+            try {
+                const res = await fetch(`https://aviationweather.gov/api/data/metar?ids=${WEATHER_ICAO_CODES.join(',')}&format=json`);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                data.forEach(m => {
+                    if (!m.icaoId || m.lat == null || m.lon == null) return;
+                    const color = flightCategoryColor(m.fltCat);
+
+                    let marker = weatherMarkers[m.icaoId];
+                    if (!marker) {
+                        marker = L.marker([m.lat, m.lon], { icon: buildWeatherIcon(m.icaoId, color) });
+                        marker.addTo(weatherLayer);
+                        marker.on('click', (e) => {
+                            if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                            marker.openPopup();
+                        });
+                        weatherMarkers[m.icaoId] = marker;
+                    } else {
+                        marker.setIcon(buildWeatherIcon(m.icaoId, color));
+                    }
+                    marker.bindPopup(buildWeatherPopup(m));
+                });
+            } catch (e) {
+                console.error('載入機場天氣(METAR)失敗:', e);
+            }
+        }
+
         const layerControl = L.control.layers({
             "衛星地圖": satellite,
             "標準地圖": osm,
@@ -938,7 +1018,8 @@
             "✈️ 機場與助導航": aipLayer,
             "📄 VFR目視航路": vfrOverlay,
             "🚧 限制空域": restrictedAreaLayer,
-            "🛸 UAS訓練空域": uasAreaLayer
+            "🛸 UAS訓練空域": uasAreaLayer,
+            "🌤️ 機場天氣": weatherLayer
         }, { position: 'topleft', collapsed: true }).addTo(map);
 
         // 強制點擊切換
@@ -961,6 +1042,11 @@
             if (e.name === "🚧 限制空域") { document.getElementById('restricted-area-panel').style.display = 'flex'; }
             if (e.name === "🛸 UAS訓練空域") { document.getElementById('uas-area-panel').style.display = 'flex'; }
             if (e.name === "📄 VFR目視航路") { document.getElementById('ctrl-vfr').style.display = 'flex'; }
+            if (e.name === "🌤️ 機場天氣") {
+                loadAirportWeather();
+                if (weatherRefreshTimer) clearInterval(weatherRefreshTimer);
+                weatherRefreshTimer = setInterval(loadAirportWeather, 10 * 60 * 1000); // 每 10 分鐘自動更新一次
+            }
         });
         map.on('overlayremove', e => {
             if (e.name === "🌑 夜間陰影區") { updateMoonInfo(); document.getElementById('ctrl-nvg').style.display = 'none'; }
@@ -971,6 +1057,9 @@
             if (e.name === "📄 VFR目視航路") {
                 document.getElementById('ctrl-vfr').style.display = 'none';
                 if (vfrCalibrating) exitVfrCalibration(true); // 圖層被關掉時視同放棄未儲存的校正草稿
+            }
+            if (e.name === "🌤️ 機場天氣") {
+                if (weatherRefreshTimer) { clearInterval(weatherRefreshTimer); weatherRefreshTimer = null; }
             }
         });
 
