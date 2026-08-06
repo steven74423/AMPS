@@ -626,7 +626,12 @@
 
         // --- 點擊選單以外的地方(地圖、其他面板等)自動關閉「限制空域」「UAS訓練空域」選單面板 ---
         // 排除圖層控制本身，避免勾選圖層時觸發的那次點擊被誤判為「點擊外部」而立刻把剛打開的面板關掉
+        // 用 capture 階段攔截：Leaflet 的地圖 click(新增航點等)是綁在地圖容器上的 bubble 階段事件，
+        // 會比 document 的 bubble 監聽更早觸發；改在 capture 階段判斷「這次點擊是用來關閉選單」時
+        // 直接 stopPropagation，讓這次點擊完全不會傳到地圖，不會同時觸發新增航點。下一次點擊(選單
+        // 已關閉)就會正常往下傳遞，恢復平常的地圖互動。
         document.addEventListener('click', (e) => {
+            let closedAny = false;
             [
                 { panel: 'restricted-area-panel' },
                 { panel: 'uas-area-panel' }
@@ -634,9 +639,14 @@
                 const el = document.getElementById(panel);
                 if (el && el.style.display !== 'none' && !el.contains(e.target) && !e.target.closest('.leaflet-control-layers')) {
                     el.style.display = 'none';
+                    closedAny = true;
                 }
             });
-        });
+            if (closedAny) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+        }, true);
 
         async function loadPowerLines() {
             let q = "";
