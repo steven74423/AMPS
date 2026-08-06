@@ -468,7 +468,7 @@
                 if (!shape) return;
 
                 const label = buildRestrictedAreaLabel(area);
-                shape.bindTooltip(label.replace('\n', '<br>'), { permanent: true, direction: 'center', className: 'restricted-area-label' });
+                shape.bindTooltip(label.replace('\n', '<br>'), { permanent: true, direction: 'center', className: 'restricted-area-label', interactive: true });
 
                 let popupHtml = `<div style="color:#333; line-height:1.5; min-width:160px;">`;
                 popupHtml += `<div style="font-weight:bold; font-size:1.05em; color:#0066CC;">🚧 ${getAreaDisplayName(area)}</div><hr style="margin:5px 0; border:0; border-top:1px solid #ccc;">`;
@@ -476,7 +476,15 @@
                 if (area.contact) popupHtml += `<b>聯絡：</b> ${area.contact}<br>`;
                 if (area.remarks_zh) popupHtml += `<div style="margin-top:4px; font-size:0.9em; color:#555;">${area.remarks_zh}</div>`;
                 popupHtml += `</div>`;
+
+                // 標籤也可被點擊：強制攔截點擊事件，直接開啟 Popup 並阻止傳遞給地圖(避免同一次點擊又觸發新增航點)
+                const raClickHandler = (e) => {
+                    if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                    shape.openPopup();
+                };
+                shape.on('click', raClickHandler);
                 shape.bindPopup(popupHtml);
+                shape.getTooltip().on('click', raClickHandler);
 
                 const subLayer = L.layerGroup([shape]);
                 restrictedAreaSubLayers[area.id] = subLayer;
@@ -569,7 +577,7 @@
                 if (!shape) return;
 
                 const label = buildUasAreaLabel(area);
-                shape.bindTooltip(label.replace('\n', '<br>'), { permanent: true, direction: 'center', className: 'uas-area-label' });
+                shape.bindTooltip(label.replace('\n', '<br>'), { permanent: true, direction: 'center', className: 'uas-area-label', interactive: true });
 
                 let popupHtml = `<div style="color:#333; line-height:1.5; min-width:160px;">`;
                 popupHtml += `<div style="font-weight:bold; font-size:1.05em; color:#CC6600;">🛸 ${getAreaDisplayName(area)}</div><hr style="margin:5px 0; border:0; border-top:1px solid #ccc;">`;
@@ -577,7 +585,15 @@
                 if (area.contact) popupHtml += `<b>聯絡：</b> ${area.contact}<br>`;
                 if (area.remarks_zh) popupHtml += `<div style="margin-top:4px; font-size:0.9em; color:#555;">${area.remarks_zh}</div>`;
                 popupHtml += `</div>`;
+
+                // 標籤也可被點擊：強制攔截點擊事件，直接開啟 Popup 並阻止傳遞給地圖(避免同一次點擊又觸發新增航點)
+                const uasClickHandler = (e) => {
+                    if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                    shape.openPopup();
+                };
+                shape.on('click', uasClickHandler);
                 shape.bindPopup(popupHtml);
+                shape.getTooltip().on('click', uasClickHandler);
 
                 const subLayer = L.layerGroup([shape]);
                 uasAreaSubLayers[area.id] = subLayer;
