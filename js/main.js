@@ -97,6 +97,29 @@
         }
         ensureRestrictedGridPattern();
 
+        function ensureUasGridPattern() {
+            const svg = map.getPane('overlayPane') && map.getPane('overlayPane').querySelector('svg');
+            if (!svg) return;
+            let defs = svg.querySelector('defs');
+            if (!defs) {
+                defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                svg.insertBefore(defs, svg.firstChild);
+            }
+            if (defs.querySelector('#uasGridPattern')) return;
+            const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+            pattern.setAttribute('id', 'uasGridPattern');
+            pattern.setAttribute('width', '10');
+            pattern.setAttribute('height', '10');
+            pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M0,0 L10,0 M0,0 L0,10');
+            path.setAttribute('stroke', '#FF9800');
+            path.setAttribute('stroke-width', '1');
+            pattern.appendChild(path);
+            defs.appendChild(pattern);
+        }
+        ensureUasGridPattern();
+
         // --- 3. NVG 月相與照度計算 ---
         let moonMarker = null;
         let moonShadowLayer = null;
@@ -502,6 +525,105 @@
         }
         initRestrictedAreas();
 
+        // --- UAS 訓練空域 (ENR 5.2.4) ---
+        const uasAreaLayer = L.layerGroup(); // 根圖層：所有 UAS 訓練空域
+        const uasAreaSubLayers = {}; // id -> L.layerGroup (單一空域，供子選項個別開關)
+
+        function buildUasAreaShape(area) {
+            const g = area.geometry || {};
+            const style = {
+                color: '#FF9800',
+                weight: 1.5,
+                opacity: 0.85,
+                fillColor: 'url(#uasGridPattern)',
+                fillOpacity: 0.9
+            };
+
+            if (area.geometry_type === 'polygon' && g.points && g.points.length > 2) {
+                const latlngs = g.points.map(p => [p[1], p[0]]);
+                return L.polygon(latlngs, style);
+            }
+
+            if (area.geometry_type === 'circle' && g.center) {
+                const radiusNm = g.radius_nm != null ? g.radius_nm : (g.radius_m != null ? g.radius_m / 1852 : null);
+                if (radiusNm == null) return null;
+                return L.circle([g.center[1], g.center[0]], Object.assign({ radius: radiusNm * 1852 }, style));
+            }
+
+            return null;
+        }
+
+        function buildUasAreaLabel(area) {
+            const name = getAreaDisplayName(area);
+            const upper = area.upper_limit || (area.upper_limit_ft != null ? `${area.upper_limit_ft} FT` : '?');
+            const lower = area.lower_limit || (area.lower_limit_ft != null ? `${area.lower_limit_ft} FT` : '?');
+            return `${name}\n${lower} - ${upper}`;
+        }
+
+        function initUasAreas() {
+            if (typeof UAS_AREAS_DATA === 'undefined' || !UAS_AREAS_DATA.areas) return;
+            const listEl = document.getElementById('uas-area-list');
+
+            UAS_AREAS_DATA.areas.forEach(area => {
+                const shape = buildUasAreaShape(area);
+                if (!shape) return;
+
+                const label = buildUasAreaLabel(area);
+                shape.bindTooltip(label.replace('\n', '<br>'), { permanent: true, direction: 'center', className: 'uas-area-label' });
+
+                let popupHtml = `<div style="color:#333; line-height:1.5; min-width:160px;">`;
+                popupHtml += `<div style="font-weight:bold; font-size:1.05em; color:#CC6600;">🛸 ${getAreaDisplayName(area)}</div><hr style="margin:5px 0; border:0; border-top:1px solid #ccc;">`;
+                popupHtml += `<b>高度：</b> ${area.lower_limit || 'SFC'} ~ ${area.upper_limit || '-'}<br>`;
+                if (area.contact) popupHtml += `<b>聯絡：</b> ${area.contact}<br>`;
+                if (area.remarks_zh) popupHtml += `<div style="margin-top:4px; font-size:0.9em; color:#555;">${area.remarks_zh}</div>`;
+                popupHtml += `</div>`;
+                shape.bindPopup(popupHtml);
+
+                const subLayer = L.layerGroup([shape]);
+                uasAreaSubLayers[area.id] = subLayer;
+                subLayer.addTo(uasAreaLayer);
+
+                if (listEl) {
+                    const row = document.createElement('div');
+                    row.className = 'uas-area-row';
+                    const cbId = `uas-cb-${area.id}`;
+                    row.innerHTML = `<input type="checkbox" id="${cbId}" checked>
+                        <label for="${cbId}"><span class="uas-name">${getAreaDisplayName(area)}</span><br><span class="uas-alt">${area.lower_limit || 'SFC'} ~ ${area.upper_limit || '-'}</span></label>`;
+                    listEl.appendChild(row);
+                    row.querySelector('input').addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            subLayer.addTo(uasAreaLayer);
+                        } else {
+                            uasAreaLayer.removeLayer(subLayer);
+                        }
+                    });
+                }
+            });
+
+            ensureUasGridPattern();
+
+            const selectAllBtn = document.getElementById('uas-select-all');
+            const selectNoneBtn = document.getElementById('uas-select-none');
+            if (selectAllBtn) selectAllBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('#uas-area-list input[type="checkbox"]').forEach(cb => {
+                    if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+                });
+            });
+            if (selectNoneBtn) selectNoneBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('#uas-area-list input[type="checkbox"]').forEach(cb => {
+                    if (cb.checked) { cb.checked = false; cb.dispatchEvent(new Event('change')); }
+                });
+            });
+
+            const closeBtn = document.getElementById('uas-area-panel-close');
+            if (closeBtn) closeBtn.addEventListener('click', () => {
+                document.getElementById('uas-area-panel').style.display = 'none';
+            });
+        }
+        initUasAreas();
+
         async function loadPowerLines() {
             let q = "";
             // Define query based on mode
@@ -762,7 +884,8 @@
             "🌑 夜間陰影區": nightShadowGroup,
             "✈️ 機場與助導航": aipLayer,
             "📄 VFR目視航路": vfrOverlay,
-            "🚧 限制空域": restrictedAreaLayer
+            "🚧 限制空域": restrictedAreaLayer,
+            "🛸 UAS訓練空域": uasAreaLayer
         }, { position: 'topleft', collapsed: true }).addTo(map);
 
         // 強制點擊切換
@@ -783,6 +906,7 @@
             if (e.name === "🚨 MSA地障警示") { document.getElementById('ctrl-msa').style.display = 'flex'; document.getElementById('msa-legend').style.display = 'flex'; }
             if (e.name === "🛡️ 防空隱蔽分析") { document.getElementById('ctrl-missile').style.display = 'flex'; }
             if (e.name === "🚧 限制空域") { document.getElementById('restricted-area-panel').style.display = 'flex'; }
+            if (e.name === "🛸 UAS訓練空域") { document.getElementById('uas-area-panel').style.display = 'flex'; }
             if (e.name === "📄 VFR目視航路") { document.getElementById('ctrl-vfr').style.display = 'flex'; }
         });
         map.on('overlayremove', e => {
@@ -790,6 +914,7 @@
             if (e.name === "🚨 MSA地障警示") { document.getElementById('ctrl-msa').style.display = 'none'; document.getElementById('msa-legend').style.display = 'none'; }
             if (e.name === "🛡️ 防空隱蔽分析") { document.getElementById('ctrl-missile').style.display = 'none'; }
             if (e.name === "🚧 限制空域") { document.getElementById('restricted-area-panel').style.display = 'none'; }
+            if (e.name === "🛸 UAS訓練空域") { document.getElementById('uas-area-panel').style.display = 'none'; }
             if (e.name === "📄 VFR目視航路") {
                 document.getElementById('ctrl-vfr').style.display = 'none';
                 if (vfrCalibrating) exitVfrCalibration(true); // 圖層被關掉時視同放棄未儲存的校正草稿

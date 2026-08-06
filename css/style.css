@@ -507,6 +507,126 @@
             box-shadow: none;
         }
 
+        /* --- UAS 訓練空域面板 (子選項清單，橘色主題) --- */
+        #uas-area-panel {
+            position: fixed;
+            top: 60px;
+            right: 10px;
+            width: 230px;
+            max-height: 55vh;
+            background: rgba(22, 15, 4, 0.92);
+            border: 1px solid #FF9800;
+            border-radius: 6px;
+            box-shadow: 0 0 12px rgba(255, 152, 0, 0.35);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #uas-area-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            border-bottom: 1px solid #FF9800;
+            color: #FFB74D;
+            font-weight: bold;
+            font-size: 0.85em;
+            flex-shrink: 0;
+        }
+
+        .uas-area-panel-actions {
+            display: flex;
+            align-items: center;
+        }
+
+        .uas-area-panel-actions a {
+            color: #FFCC80;
+            font-size: 0.85em;
+            font-weight: normal;
+            text-decoration: none;
+            margin-left: 8px;
+            cursor: pointer;
+        }
+
+        .uas-area-panel-actions a:hover {
+            text-decoration: underline;
+        }
+
+        #uas-area-panel-close {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 1em;
+            cursor: pointer;
+            margin-left: 10px;
+            line-height: 1;
+        }
+
+        #uas-area-panel-close:hover {
+            color: #fff;
+        }
+
+        #uas-area-list {
+            overflow-y: auto;
+            padding: 4px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        #uas-area-list::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        #uas-area-list::-webkit-scrollbar-thumb {
+            background: #cc660066;
+            border-radius: 3px;
+        }
+
+        .uas-area-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            font-size: 0.78em;
+            color: #ddd;
+            line-height: 1.3;
+            padding: 2px 0;
+            border-bottom: 1px dashed #2a1d0a;
+        }
+
+        .uas-area-row input[type="checkbox"] {
+            accent-color: #FF9800;
+            margin-top: 2px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .uas-area-row label {
+            cursor: pointer;
+        }
+
+        .uas-area-row .uas-name {
+            color: #FFCC80;
+            font-weight: bold;
+        }
+
+        .uas-area-row .uas-alt {
+            color: #aaa;
+        }
+
+        /* UAS 訓練空域圖形上的名稱/高度標籤 */
+        .leaflet-tooltip.uas-area-label {
+            background: rgba(25, 15, 0, 0.75) !important;
+            border: 1px solid #FF9800 !important;
+            color: #FFCC80 !important;
+            font-size: 0.75em;
+            font-weight: bold;
+            white-space: nowrap !important;
+            box-shadow: none;
+        }
+
         /* [修正] 強制透明標籤 (移除預設白色背景) */
         .leaflet-tooltip.big-label {
             background: transparent !important;

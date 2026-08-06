@@ -89,6 +89,17 @@
         </div>
         <div id="restricted-area-list"></div>
     </div>
+    <div id="uas-area-panel">
+        <div id="uas-area-panel-header">
+            <span>🛸 UAS訓練空域</span>
+            <span class="uas-area-panel-actions">
+                <a href="#" id="uas-select-all">全選</a>
+                <a href="#" id="uas-select-none">全不選</a>
+                <button id="uas-area-panel-close" title="關閉">✕</button>
+            </span>
+        </div>
+        <div id="uas-area-list"></div>
+    </div>
 
     <div id="map"></div>
 
@@ -255,8 +266,9 @@
     <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
     <script src="./js/restricted_areas_data.js"></script>
+    <script src="./js/uas_areas_data.js"></script>
     <script src="./js/config.js"></script>
-<script defer src="./js/main.js?v=3"></script>
+<script defer src="./js/main.js?v=4"></script>
 </body>
 
 </html>

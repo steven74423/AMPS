@@ -1,0 +1,924 @@
+﻿// 資料來源: enr5-2_uas_training_areas.json (ENR 5.2.4 UAS訓練空域)
+const UAS_AREAS_DATA = {
+  "source": "R.O.C. Taiwan CAA eAIP AIRAC AIP AMDT 03/26, effective 06 AUG 2026",
+  "section": "ENR 5.2.4 軍用無人駕駛航空器系統(UAS)訓練空域",
+  "source_url": "https://ais.caa.gov.tw/eaip/AIRAC%20AIP%20AMDT%2003-26_2026_08_06/eAIP/RC-ENR%205.2-zh-TW.html#ENR-5.2",
+  "coordinate_note": "geometry 座標為 [經度, 緯度] (WGS84, GeoJSON [lon,lat] 順序); 高度另提供 *_limit_ft 數值欄位(FT), SFC=0",
+  "count": 24,
+  "areas": [
+    {
+      "id": "ARMY1",
+      "name_zh": "新竹湖口訓場",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            121.047222,
+            24.876389
+          ],
+          [
+            121.044722,
+            24.876111
+          ],
+          [
+            121.0125,
+            24.856389
+          ],
+          [
+            121.044722,
+            24.834444
+          ],
+          [
+            121.059722,
+            24.854444
+          ],
+          [
+            121.091111,
+            24.862778
+          ],
+          [
+            121.087222,
+            24.871389
+          ],
+          [
+            121.047222,
+            24.876389
+          ]
+        ]
+      },
+      "upper_limit": "400 FT AGL",
+      "lower_limit": "SFC",
+      "contact": "陸軍教育訓練暨準則發展指揮部(886-3-4093574)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 400,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ARMY2",
+      "name_zh": "台中竹坑營區",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.736944,
+            24.094722
+          ],
+          [
+            120.716111,
+            24.092222
+          ],
+          [
+            120.715556,
+            24.083056
+          ],
+          [
+            120.738056,
+            24.086944
+          ],
+          [
+            120.736944,
+            24.094722
+          ]
+        ]
+      },
+      "upper_limit": "1900 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "陸軍第十軍團指揮部(886-4-25814910)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1900,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ARMY3",
+      "name_zh": "澎湖五德營區",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            119.589167,
+            23.523611
+          ],
+          [
+            119.584722,
+            23.528056
+          ],
+          [
+            119.565278,
+            23.511111
+          ],
+          [
+            119.575833,
+            23.503889
+          ],
+          [
+            119.589167,
+            23.523611
+          ]
+        ]
+      },
+      "upper_limit": "200 FT AGL",
+      "lower_limit": "SFC",
+      "contact": "陸軍澎湖防衛指揮部(886-6-9270162)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 200,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ARMY4",
+      "name_zh": "台南白河內角營區",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.478889,
+            23.411944
+          ],
+          [
+            120.45,
+            23.410556
+          ],
+          [
+            120.435833,
+            23.404444
+          ],
+          [
+            120.444444,
+            23.380278
+          ],
+          [
+            120.483333,
+            23.401111
+          ],
+          [
+            120.478889,
+            23.411944
+          ]
+        ]
+      },
+      "upper_limit": "200 FT AGL",
+      "lower_limit": "SFC",
+      "contact": "陸軍教育訓練暨準則發展指揮部(886-3-4093574)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 200,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ARMY5",
+      "name_zh": "屏東萬金營區",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.628611,
+            22.613611
+          ],
+          [
+            120.617222,
+            22.6125
+          ],
+          [
+            120.617778,
+            22.595278
+          ],
+          [
+            120.631111,
+            22.595833
+          ],
+          [
+            120.628611,
+            22.613611
+          ]
+        ]
+      },
+      "upper_limit": "2000 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "陸軍第八軍團指揮部(886-7-6691577)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 2000,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ARMY6",
+      "name_zh": "高雄仁美營區",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.411667,
+            22.663333
+          ],
+          [
+            120.407222,
+            22.661667
+          ],
+          [
+            120.409167,
+            22.654722
+          ],
+          [
+            120.416111,
+            22.656111
+          ],
+          [
+            120.411667,
+            22.663333
+          ]
+        ]
+      },
+      "upper_limit": "1400 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "陸軍第八軍團指揮部(886-7-6691577)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1400,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NA-A",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            121.452778,
+            25.623611
+          ],
+          [
+            121.286667,
+            25.481389
+          ],
+          [
+            121.316667,
+            25.416667
+          ],
+          [
+            121.466667,
+            25.416667
+          ],
+          [
+            121.452778,
+            25.623611
+          ]
+        ]
+      },
+      "upper_limit": "1500 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1500,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NA-B",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            121.316667,
+            25.416667
+          ],
+          [
+            121.466667,
+            25.416667
+          ],
+          [
+            121.478611,
+            25.295556
+          ],
+          [
+            121.426667,
+            25.265278
+          ],
+          [
+            121.316667,
+            25.416667
+          ]
+        ]
+      },
+      "upper_limit": "1000 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1000,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NA-C",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            121.478611,
+            25.295556
+          ],
+          [
+            121.426667,
+            25.265278
+          ],
+          [
+            121.45,
+            25.233333
+          ],
+          [
+            121.483333,
+            25.25
+          ],
+          [
+            121.478611,
+            25.295556
+          ]
+        ]
+      },
+      "upper_limit": "400 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 400,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NB-A",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            121.058333,
+            25.3
+          ],
+          [
+            120.85,
+            25.133333
+          ],
+          [
+            120.885278,
+            25.091667
+          ],
+          [
+            121.088889,
+            25.259722
+          ],
+          [
+            121.058333,
+            25.3
+          ]
+        ]
+      },
+      "upper_limit": "1000 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1000,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NB-B",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.885278,
+            25.091667
+          ],
+          [
+            120.933333,
+            25.033333
+          ],
+          [
+            121.133333,
+            25.2
+          ],
+          [
+            121.088889,
+            25.259722
+          ],
+          [
+            120.885278,
+            25.091667
+          ]
+        ]
+      },
+      "upper_limit": "1000 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1000,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NB-C",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.933333,
+            25.033333
+          ],
+          [
+            120.988889,
+            24.958333
+          ],
+          [
+            121.020833,
+            24.991667
+          ],
+          [
+            120.966667,
+            25.066667
+          ],
+          [
+            120.933333,
+            25.033333
+          ]
+        ]
+      },
+      "upper_limit": "400 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 400,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NC-A",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.268056,
+            24.690556
+          ],
+          [
+            120,
+            24.4
+          ],
+          [
+            120.177778,
+            24.285833
+          ],
+          [
+            120.481389,
+            24.617778
+          ],
+          [
+            120.268056,
+            24.690556
+          ]
+        ]
+      },
+      "upper_limit": "1500 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第一大隊(886-4-26580742)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1500,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NC-B",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.177778,
+            24.285833
+          ],
+          [
+            120.481389,
+            24.617778
+          ],
+          [
+            120.583333,
+            24.566667
+          ],
+          [
+            120.283333,
+            24.216667
+          ],
+          [
+            120.177778,
+            24.285833
+          ]
+        ]
+      },
+      "upper_limit": "1000 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第一大隊(886-4-26580742)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1000,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NC-C",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.583333,
+            24.566667
+          ],
+          [
+            120.559444,
+            24.538889
+          ],
+          [
+            120.609722,
+            24.468056
+          ],
+          [
+            120.636944,
+            24.491944
+          ],
+          [
+            120.583333,
+            24.566667
+          ]
+        ]
+      },
+      "upper_limit": "400 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第一大隊(886-4-26580742)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 400,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NC-D",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.609722,
+            24.468056
+          ],
+          [
+            120.636944,
+            24.491944
+          ],
+          [
+            120.654722,
+            24.466667
+          ],
+          [
+            120.628333,
+            24.4425
+          ],
+          [
+            120.609722,
+            24.468056
+          ]
+        ]
+      },
+      "upper_limit": "400 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第一大隊(886-4-26580742)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 400,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ND-A",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            119.915278,
+            22.866667
+          ],
+          [
+            119.75,
+            22.866667
+          ],
+          [
+            119.75,
+            22.75
+          ],
+          [
+            119.915278,
+            22.75
+          ],
+          [
+            119.915278,
+            22.866667
+          ]
+        ]
+      },
+      "upper_limit": "1500 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第二大隊(886-7-5883052)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1500,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ND-B",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            119.915278,
+            22.866667
+          ],
+          [
+            119.915278,
+            22.75
+          ],
+          [
+            120.05,
+            22.75
+          ],
+          [
+            120.05,
+            22.866667
+          ],
+          [
+            119.915278,
+            22.866667
+          ]
+        ]
+      },
+      "upper_limit": "1000 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第二大隊(886-7-5883052)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1000,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ND-C",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.05,
+            22.75
+          ],
+          [
+            120.05,
+            22.783333
+          ],
+          [
+            120.166667,
+            22.733333
+          ],
+          [
+            120.166667,
+            22.7
+          ],
+          [
+            120.05,
+            22.75
+          ]
+        ]
+      },
+      "upper_limit": "1000 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第二大隊(886-7-5883052)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1000,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "ND-D",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            120.166667,
+            22.7
+          ],
+          [
+            120.166667,
+            22.733333
+          ],
+          [
+            120.266389,
+            22.681667
+          ],
+          [
+            120.274722,
+            22.648333
+          ],
+          [
+            120.166667,
+            22.7
+          ]
+        ]
+      },
+      "upper_limit": "1000 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第二大隊(886-7-5883052)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1000,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NE-A",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            121.966667,
+            24.616667
+          ],
+          [
+            121.865278,
+            24.609444
+          ],
+          [
+            121.8575,
+            24.606944
+          ],
+          [
+            121.8575,
+            24.601111
+          ],
+          [
+            121.966667,
+            24.583333
+          ],
+          [
+            121.966667,
+            24.616667
+          ]
+        ]
+      },
+      "upper_limit": "400 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 400,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NE-B",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            122.115556,
+            24.616667
+          ],
+          [
+            121.966667,
+            24.616667
+          ],
+          [
+            121.966667,
+            24.583333
+          ],
+          [
+            122.106944,
+            24.583333
+          ],
+          [
+            122.115556,
+            24.616667
+          ]
+        ]
+      },
+      "upper_limit": "400 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 400,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NE-C",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            122.05,
+            24.366667
+          ],
+          [
+            122.166667,
+            24.416667
+          ],
+          [
+            122.333333,
+            25
+          ],
+          [
+            122.216667,
+            25
+          ],
+          [
+            122.05,
+            24.366667
+          ]
+        ]
+      },
+      "upper_limit": "1500 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1500,
+      "lower_limit_ft": 0
+    },
+    {
+      "id": "NE-D",
+      "name_zh": "",
+      "name_en": "",
+      "type": "UAS訓練空域",
+      "geometry_type": "polygon",
+      "geometry": {
+        "points": [
+          [
+            122.05,
+            24.366667
+          ],
+          [
+            121.995833,
+            24.2
+          ],
+          [
+            122.1,
+            24.166667
+          ],
+          [
+            122.166667,
+            24.416667
+          ],
+          [
+            122.05,
+            24.366667
+          ]
+        ]
+      },
+      "upper_limit": "1500 FT AMSL",
+      "lower_limit": "SFC",
+      "contact": "海軍海鋒第三大隊(886-2-28052316轉軍線684330)",
+      "remarks_zh": "H24",
+      "upper_limit_ft": 1500,
+      "lower_limit_ft": 0
+    }
+  ],
+  "units": {
+    "height": "FT",
+    "distance": "NM (nautical miles)"
+  }
+}
+;
+
