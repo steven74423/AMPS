@@ -658,6 +658,19 @@
                     closedAny = true;
                 }
             });
+
+            // 空域標籤點擊後開啟的資訊彈窗(白色框)：點擊地圖以外的地方(下方工具列、圖層控制等)
+            // 也要能關閉。點擊地圖「內部」則交給 Leaflet 預設的 closePopupOnClick 及既有的
+            // isPopupOpen 航點防呆機制處理，這裡不重複攔截，避免影響「點另一個空域標籤切換彈窗」的正常互動。
+            if (!e.target.closest('#map')) {
+                let popupOpen = false;
+                map.eachLayer(layer => { if (layer instanceof L.Popup) popupOpen = true; });
+                if (popupOpen && !e.target.closest('.leaflet-popup')) {
+                    map.closePopup();
+                    closedAny = true;
+                }
+            }
+
             if (closedAny) {
                 e.stopPropagation();
                 e.preventDefault();
