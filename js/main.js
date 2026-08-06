@@ -624,6 +624,20 @@
         }
         initUasAreas();
 
+        // --- 點擊選單以外的地方(地圖、其他面板等)自動關閉「限制空域」「UAS訓練空域」選單面板 ---
+        // 排除圖層控制本身，避免勾選圖層時觸發的那次點擊被誤判為「點擊外部」而立刻把剛打開的面板關掉
+        document.addEventListener('click', (e) => {
+            [
+                { panel: 'restricted-area-panel' },
+                { panel: 'uas-area-panel' }
+            ].forEach(({ panel }) => {
+                const el = document.getElementById(panel);
+                if (el && el.style.display !== 'none' && !el.contains(e.target) && !e.target.closest('.leaflet-control-layers')) {
+                    el.style.display = 'none';
+                }
+            });
+        });
+
         async function loadPowerLines() {
             let q = "";
             // Define query based on mode
