@@ -1,10 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+/* --- 戰術風格色票 (與 FDR/css/tactical.css 呼應) --- */
+:root {
+    --tac-gold: #FFB300;
+    --tac-cyan: #00FFFF;
+    --tac-red: #FF3B30;
+}
+
 /* --- 基礎設定 --- */
         body,
         html {
             margin: 0;
             padding: 0;
             height: 100%;
-            font-family: sans-serif;
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
             overflow: hidden;
             background: #222;
         }
@@ -77,7 +86,8 @@
             overflow-y: auto;
             background: #1a1a1a;
             color: white;
-            border-top: 2px solid #00FFFF;
+            border-top: 3px solid var(--tac-gold);
+            box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6), 0 -4px 12px rgba(255, 179, 0, 0.15);
             display: flex;
             flex-direction: column;
             gap: 5px;
@@ -206,9 +216,12 @@
             font-weight: bold;
             color: #00FFFF;
             background: #333;
-            border-radius: 4px;
+            border-radius: 0;
             border: 1px solid #444;
+            border-left: 2px solid var(--tac-gold);
             font-size: 0.7em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             display: flex;
             align-items: center;
             justify-content: space-around;
@@ -218,15 +231,18 @@
             color: #FFFF00;
             font-size: 1.1em;
             margin-left: 2px;
+            letter-spacing: normal;
         }
 
         .btn {
             padding: 0 12px;
             height: 100%;
             border: none;
-            border-radius: 4px;
+            border-radius: 0;
             color: white;
             font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             cursor: pointer;
             font-size: 0.85em;
             display: flex;
@@ -640,7 +656,8 @@
         #ai-modal {
             background: #0d1117;
             border: 1px solid #00FFFF;
-            border-radius: 16px;
+            border-top: 3px solid var(--tac-gold);
+            border-radius: 2px;
             width: 90%;
             max-width: 680px;
             max-height: 80vh;
@@ -676,6 +693,8 @@
         #ai-modal-header h2 {
             margin: 0;
             font-size: 1em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             color: #00FFFF;
             display: flex;
             align-items: center;
@@ -898,6 +917,7 @@
                不支援 dvh 的舊瀏覽器會直接忽略這行，繼續套用上面的 100vh */
             background: #1a1a1a;
             border-left: 2px solid #00FFFF;
+            border-top: 3px solid var(--tac-gold);
             color: white;
             z-index: 9999;
             transition: right 0.3s ease;
@@ -922,6 +942,8 @@
         #plan-panel-header h2 {
             margin: 0;
             font-size: 1.2em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             color: #00FFFF;
             display: flex;
             align-items: center;
