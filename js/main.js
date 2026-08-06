@@ -1823,6 +1823,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
         };
 
         planPanelClose.onclick = () => {
+            commitPlanChanges();
             planPanel.classList.remove('active');
         };
 
@@ -1928,7 +1929,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             planPanelBody.innerHTML = html;
         }
 
-        btnConfirmPlan.onclick = () => {
+        function commitPlanChanges() {
             waypoints.forEach((pt, i) => {
                 if (!markers[i]) return;
                 const nameInput = document.getElementById(`plan-name-${i}`);
@@ -1944,6 +1945,10 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 }
             });
             updatePlan();
+        }
+
+        btnConfirmPlan.onclick = () => {
+            commitPlanChanges();
             planPanel.classList.remove('active');
         };
 

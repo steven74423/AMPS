@@ -893,6 +893,9 @@
             width: 650px;
             max-width: 100vw;
             height: 100vh;
+            height: 100dvh;
+            /* 100dvh 會扣掉平板/手機虛擬鍵盤跳出時佔用的空間，避免底部「確認」鍵被鍵盤蓋住；
+               不支援 dvh 的舊瀏覽器會直接忽略這行，繼續套用上面的 100vh */
             background: #1a1a1a;
             border-left: 2px solid #00FFFF;
             color: white;
