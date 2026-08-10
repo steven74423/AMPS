@@ -1,0 +1,15 @@
+{
+  "name": "amps-metar-proxy",
+  "version": "1.0.0",
+  "description": "Minimal server-side CORS proxy for aviationweather.gov METAR data, used by the AMPS airport weather layer.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

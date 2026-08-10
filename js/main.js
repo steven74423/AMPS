@@ -978,8 +978,14 @@
         }
 
         async function loadAirportWeather() {
+            // aviationweather.gov 沒有開放瀏覽器跨網域請求(無 CORS 標頭)，改打自架的 metar-proxy
+            // (見專案根目錄 metar-proxy/ 資料夾)，由伺服器端代為轉發並附上 CORS 標頭
+            if (!APP_CONFIG.METAR_PROXY_URL) {
+                console.warn('未設定 APP_CONFIG.METAR_PROXY_URL，機場天氣圖層無法載入資料。請部署 metar-proxy/ 並在 config.js 填入網址。');
+                return;
+            }
             try {
-                const res = await fetch(`https://aviationweather.gov/api/data/metar?ids=${WEATHER_ICAO_CODES.join(',')}&format=json`);
+                const res = await fetch(`${APP_CONFIG.METAR_PROXY_URL}?ids=${WEATHER_ICAO_CODES.join(',')}`);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 data.forEach(m => {

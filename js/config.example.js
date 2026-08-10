@@ -2,5 +2,6 @@
 const APP_CONFIG = {
     LOGIN_PASSWORD: "your-password-here",
     OPENAIP_API_KEY: "your-openaip-api-key-here", // 申請: https://www.openaip.net
-    CESIUM_ION_TOKEN: "your-cesium-ion-token-here" // 申請: https://ion.cesium.com
+    CESIUM_ION_TOKEN: "your-cesium-ion-token-here", // 申請: https://ion.cesium.com
+    METAR_PROXY_URL: "" // 部署 metar-proxy/(見該資料夾)後填入你的網址，例如 "https://your-domain.com/metar-proxy/metar"
 };
