@@ -126,6 +126,24 @@ async function computeTerrainHorizon(centerLat, centerLng, rangeNm, bearingsCoun
 
 let threatDomeEntity = null;
 
+// Cesium.Terrain.fromWorldTerrain() 是非同步載入的：viewer 建立當下 viewer.terrainProvider
+// 通常還是預設的平面橢球體地形(沒有 .availability)，這時呼叫 sampleTerrainMostDetailed 會直接丟例外。
+// 輪詢等到真正的地形資料就緒(出現 .availability)再繼續，逾時就放棄讓外層 catch 走退回方案。
+function waitForTerrainReady(timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const start = Date.now();
+        (function check() {
+            if (viewer && viewer.terrainProvider && viewer.terrainProvider.availability) {
+                resolve();
+            } else if (Date.now() - start > timeoutMs) {
+                reject(new Error('地形資料載入逾時'));
+            } else {
+                setTimeout(check, 200);
+            }
+        })();
+    });
+}
+
 async function drawThreatDome(threatData) {
     if (!viewer || !threatData) return;
 
@@ -140,6 +158,7 @@ async function drawThreatDome(threatData) {
     const bearingsCount = 72; // 每 5 度一條剖面
 
     try {
+        await waitForTerrainReady(8000);
         const { missileElev, maxSlopePerBearing } = await computeTerrainHorizon(threatData.lat, threatData.lng, threatData.rangeNm, bearingsCount, 12);
 
         const wallDegreesPositions = [];
