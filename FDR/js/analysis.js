@@ -80,23 +80,116 @@ function createCesiumMarker() {
     });
 }
 
-function drawThreatDome(threatData) {
+// 沿指定方位角、距離推算目的地座標 (球面大圓，跟 getBearing/getDistance 同一套簡化模型)
+function destinationPoint(lat, lng, bearingRad, distM) {
+    const R = 6371e3;
+    const delta = distM / R;
+    const phi1 = lat * Math.PI / 180, lambda1 = lng * Math.PI / 180;
+    const phi2 = Math.asin(Math.sin(phi1) * Math.cos(delta) + Math.cos(phi1) * Math.sin(delta) * Math.cos(bearingRad));
+    const lambda2 = lambda1 + Math.atan2(Math.sin(bearingRad) * Math.sin(delta) * Math.cos(phi1), Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2));
+    return { lat: phi2 * 180 / Math.PI, lng: lambda2 * 180 / Math.PI };
+}
+
+// 對飛彈周圍每個方位角做地形剖面掃描，找出「地形水平線」的最大遮蔽仰角(maxSlope)。
+// 邏輯與地圖端(main.js)的防空隱蔽分析(viewshed)一致：某方向若有高山擋住視線，
+// 該方向的水平線就會被墊高，圓頂在該方向的底部也要跟著墊高，代表低於此處看不到目標。
+async function computeTerrainHorizon(centerLat, centerLng, rangeNm, bearingsCount, samplesPerBearing) {
+    const rangeM = rangeNm * 1852;
+    const cartographics = [];
+    const meta = [];
+
+    for (let b = 0; b < bearingsCount; b++) {
+        const bearingRad = (b / bearingsCount) * 2 * Math.PI;
+        for (let s = 1; s <= samplesPerBearing; s++) {
+            const distM = (s / samplesPerBearing) * rangeM;
+            const dest = destinationPoint(centerLat, centerLng, bearingRad, distM);
+            cartographics.push(Cesium.Cartographic.fromDegrees(dest.lng, dest.lat));
+            meta.push({ b, distM });
+        }
+    }
+    cartographics.push(Cesium.Cartographic.fromDegrees(centerLng, centerLat)); // 飛彈自身位置，取地面高度
+
+    const sampled = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);
+    const missileElev = sampled[sampled.length - 1].height || 0;
+
+    const maxSlopePerBearing = new Array(bearingsCount).fill(-Infinity);
+    for (let i = 0; i < meta.length; i++) {
+        const h = sampled[i].height || 0;
+        const { b, distM } = meta[i];
+        const curvatureDrop = (distM * distM) / 12742000; // 地球曲率修正，跟 2D 端同公式
+        const slope = (h - curvatureDrop - missileElev) / Math.max(distM, 1);
+        if (slope > maxSlopePerBearing[b]) maxSlopePerBearing[b] = slope;
+    }
+
+    return { missileElev, maxSlopePerBearing };
+}
+
+let threatDomeEntity = null;
+
+async function drawThreatDome(threatData) {
     if (!viewer || !threatData) return;
+
+    if (threatDomeEntity) {
+        try { viewer.entities.remove(threatDomeEntity); } catch (e) { }
+        threatDomeEntity = null;
+    }
+
+    const rangeM = threatData.rangeNm * 1852;
+    const targetAltM = (threatData.altFt || 500) * 0.3048;
+    const ceilingM = Math.max(targetAltM * 2, 6000);
+    const bearingsCount = 72; // 每 5 度一條剖面
+
     try {
-        const radiusMeters = threatData.rangeNm * 1852;
-        viewer.entities.add({
-            name: 'Missile Threat Dome',
-            position: Cesium.Cartesian3.fromDegrees(threatData.lng, threatData.lat, 0),
-            ellipsoid: {
-                radii: new Cesium.Cartesian3(radiusMeters, radiusMeters, radiusMeters),
-                material: Cesium.Color.RED.withAlpha(0.3),
+        const { missileElev, maxSlopePerBearing } = await computeTerrainHorizon(threatData.lat, threatData.lng, threatData.rangeNm, bearingsCount, 12);
+
+        const wallDegreesPositions = [];
+        const minHeights = [];
+        const maxHeights = [];
+        const curvatureDropAtRange = (rangeM * rangeM) / 12742000;
+
+        for (let b = 0; b <= bearingsCount; b++) { // <= 多算一圈把首尾接起來
+            const bi = b % bearingsCount;
+            const bearingRad = (bi / bearingsCount) * 2 * Math.PI;
+            const dest = destinationPoint(threatData.lat, threatData.lng, bearingRad, rangeM);
+
+            let floor = missileElev + maxSlopePerBearing[bi] * rangeM + curvatureDropAtRange;
+            floor = Math.max(floor, missileElev); // 不低於地面
+            floor = Math.min(floor, ceilingM - 10); // 不高於天花板
+
+            wallDegreesPositions.push(dest.lng, dest.lat);
+            minHeights.push(floor);
+            maxHeights.push(ceilingM);
+        }
+
+        threatDomeEntity = viewer.entities.add({
+            name: 'Missile Threat Coverage (Terrain-Masked)',
+            wall: {
+                positions: Cesium.Cartesian3.fromDegreesArray(wallDegreesPositions),
+                minimumHeights: minHeights,
+                maximumHeights: maxHeights,
+                material: Cesium.Color.RED.withAlpha(0.35),
                 outline: true,
-                outlineColor: Cesium.Color.RED.withAlpha(0.8),
-                maximumCone: Cesium.Math.PI_OVER_TWO
+                outlineColor: Cesium.Color.RED.withAlpha(0.8)
             }
         });
     } catch (e) {
-        console.error("Error drawing threat dome:", e);
+        console.error("地形水平線計算失敗，改用未考慮地形遮蔽的簡易圓頂:", e);
+        try {
+            const radiusMeters = rangeM;
+            threatDomeEntity = viewer.entities.add({
+                name: 'Missile Threat Dome (fallback)',
+                position: Cesium.Cartesian3.fromDegrees(threatData.lng, threatData.lat, 0),
+                ellipsoid: {
+                    radii: new Cesium.Cartesian3(radiusMeters, radiusMeters, radiusMeters),
+                    material: Cesium.Color.RED.withAlpha(0.3),
+                    outline: true,
+                    outlineColor: Cesium.Color.RED.withAlpha(0.8),
+                    maximumCone: Cesium.Math.PI_OVER_TWO
+                }
+            });
+        } catch (e2) {
+            console.error("Error drawing fallback threat dome:", e2);
+        }
     }
 }
 
