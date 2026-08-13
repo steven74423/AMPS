@@ -275,20 +275,55 @@ function drawAirspaceVolumes(areas, colorHex, labelPrefix) {
     });
 }
 
-// 畫出已下載的高壓電纜線段/電塔，紅色點線表示，貼地顯示(沒有實際電線離地高度資料)
-function drawPowerLines(powerData) {
+// 畫出已下載的高壓電纜線段/電塔，紅色點線表示。
+// 不用 clampToGround 貼地線：Cesium 的貼地線材質在地形資料還沒就緒時常會靜默失敗(不丟錯誤、就是不畫)，
+// 跟飛彈圓頂遇到的地形時機問題同一類。改成實際批次取樣地形高度，把電纜線抬高一點畫成一般 3D 線，
+// 避開貼地線這條限制較多的算繪路徑；取樣失敗時才退回 clampToGround 當作備援。
+async function drawPowerLines(powerData) {
     if (!viewer || !powerData) return;
     try {
-        (powerData.lines || []).forEach(line => {
-            if (!line || line.length < 2) return;
-            const flat = [];
-            line.forEach(p => { flat.push(p[0], p[1]); });
+        const lines = (powerData.lines || []).filter(l => l && l.length > 1);
+        const towers = powerData.towers || [];
+        if (!lines.length && !towers.length) return;
+
+        const cartographics = [];
+        lines.forEach(line => line.forEach(p => cartographics.push(Cesium.Cartographic.fromDegrees(p[0], p[1]))));
+        towers.forEach(t => cartographics.push(Cesium.Cartographic.fromDegrees(t[0], t[1])));
+
+        let sampled = null;
+        if (viewer.terrainProvider && viewer.terrainProvider.availability) {
+            try {
+                sampled = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);
+            } catch (e) {
+                console.warn('高壓電纜地形取樣失敗，改用貼地線繪製:', e);
+            }
+        }
+
+        const CABLE_HEIGHT_OFFSET_M = 15; // 電纜實際離地高度未知，抬高一個保守值方便目視辨識
+
+        let cursor = 0;
+        lines.forEach(line => {
+            let positions;
+            if (sampled) {
+                const flat = [];
+                line.forEach(p => {
+                    const h = (sampled[cursor].height || 0) + CABLE_HEIGHT_OFFSET_M;
+                    cursor++;
+                    flat.push(p[0], p[1], h);
+                });
+                positions = Cesium.Cartesian3.fromDegreesArrayHeights(flat);
+            } else {
+                const flat = [];
+                line.forEach(p => flat.push(p[0], p[1]));
+                positions = Cesium.Cartesian3.fromDegreesArray(flat);
+            }
+
             viewer.entities.add({
                 name: '高壓電纜',
                 polyline: {
-                    positions: Cesium.Cartesian3.fromDegreesArray(flat),
+                    positions: positions,
                     width: 3,
-                    clampToGround: true,
+                    clampToGround: !sampled,
                     material: new Cesium.PolylineDashMaterialProperty({
                         color: Cesium.Color.RED,
                         dashLength: 16
@@ -297,16 +332,26 @@ function drawPowerLines(powerData) {
             });
         });
 
-        (powerData.towers || []).forEach(t => {
+        towers.forEach(t => {
+            let position, heightReference;
+            if (sampled) {
+                position = Cesium.Cartesian3.fromDegrees(t[0], t[1], sampled[cursor].height || 0);
+                heightReference = Cesium.HeightReference.NONE;
+            } else {
+                position = Cesium.Cartesian3.fromDegrees(t[0], t[1]);
+                heightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
+            }
+            cursor++;
+
             viewer.entities.add({
                 name: '電塔',
-                position: Cesium.Cartesian3.fromDegrees(t[0], t[1]),
+                position: position,
                 point: {
                     pixelSize: 6,
                     color: Cesium.Color.RED,
                     outlineColor: Cesium.Color.BLACK,
                     outlineWidth: 1,
-                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                    heightReference: heightReference
                 }
             });
         });
