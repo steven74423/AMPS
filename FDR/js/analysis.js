@@ -6,6 +6,8 @@ if (typeof APP_CONFIG === 'undefined') {
 }
 
 let activeThreatData = null;
+let activeRestrictedAreas = [];
+let activeUasAreas = [];
 /**
  * FDR-Alpha Analysis Logic
  * Handles GPX parsing, chart rendering, and map playback.
@@ -96,6 +98,68 @@ function drawThreatDome(threatData) {
     } catch (e) {
         console.error("Error drawing threat dome:", e);
     }
+}
+
+// 把限制空域/UAS訓練空域的圓形範圍近似成多邊形，供 Cesium polygon hierarchy 使用
+// (地圖端(main.js)的圓已經是用中心點+半徑表示，這裡用簡易平面投影取樣圓周，
+// 半徑通常只有幾十公里，這個近似誤差可忽略)
+function circleToDegreesPositions(centerLng, centerLat, radiusM, steps) {
+    steps = steps || 48;
+    const positions = [];
+    const latPerM = 1 / 111320;
+    const lonPerM = 1 / (111320 * Math.cos(centerLat * Math.PI / 180));
+    for (let i = 0; i <= steps; i++) {
+        const angle = (i / steps) * 2 * Math.PI;
+        const lng = centerLng + radiusM * Math.sin(angle) * lonPerM;
+        const lat = centerLat + radiusM * Math.cos(angle) * latPerM;
+        positions.push(lng, lat);
+    }
+    return positions;
+}
+
+// 畫出限制空域/UAS訓練空域：以下限~上限高度擠出(extrude)成 3D 立體柱狀空域，
+// 這樣可以直接目視判斷飛航路線的高度剖面有沒有穿過這些空域
+function drawAirspaceVolumes(areas, colorHex, labelPrefix) {
+    if (!viewer || !areas || !areas.length) return;
+    const color = Cesium.Color.fromCssColorString(colorHex);
+
+    areas.forEach(area => {
+        try {
+            const g = area.geometry || {};
+            let degreesArray = null;
+
+            if (area.geometry_type === 'polygon' && g.points && g.points.length > 2) {
+                degreesArray = [];
+                g.points.forEach(p => { degreesArray.push(p[0], p[1]); });
+            } else if (area.geometry_type === 'circle' && g.center) {
+                const radiusNm = g.radius_nm != null ? g.radius_nm : (g.radius_m != null ? g.radius_m / 1852 : null);
+                if (radiusNm == null) return;
+                degreesArray = circleToDegreesPositions(g.center[0], g.center[1], radiusNm * 1852);
+            } else if (g.circle_part && g.circle_part.center && g.circle_part.radius_nm != null) {
+                degreesArray = circleToDegreesPositions(g.circle_part.center[0], g.circle_part.center[1], g.circle_part.radius_nm * 1852);
+            }
+
+            if (!degreesArray) return;
+
+            const lowerM = (area.lower_limit_ft || 0) * 0.3048;
+            const upperM = (area.upper_limit_ft != null ? area.upper_limit_ft : 5000) * 0.3048;
+
+            viewer.entities.add({
+                name: `${labelPrefix || ''}${area.name || area.id}`,
+                polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArray(degreesArray),
+                    height: lowerM,
+                    extrudedHeight: Math.max(upperM, lowerM + 10),
+                    material: color.withAlpha(0.3),
+                    outline: true,
+                    outlineColor: color.withAlpha(0.9),
+                    perPositionHeight: false
+                }
+            });
+        } catch (e) {
+            console.error('Error drawing airspace volume:', area && area.id, e);
+        }
+    });
 }
 
 function initCesium() {
@@ -226,7 +290,13 @@ function updateUI() {
         if (activeThreatData) {
             drawThreatDome(activeThreatData);
         }
-        
+        if (activeRestrictedAreas && activeRestrictedAreas.length) {
+            drawAirspaceVolumes(activeRestrictedAreas, '#0080FF', '🚧 ');
+        }
+        if (activeUasAreas && activeUasAreas.length) {
+            drawAirspaceVolumes(activeUasAreas, '#FF9800', '🛸 ');
+        }
+
         const coords = [];
         missionData.forEach(d => {
             coords.push(d.lon, d.lat, d.alt * 0.3048); // Alt from FT back to M for Cesium
@@ -536,6 +606,12 @@ window.onload = () => {
                 activeThreatData = payload.threat;
                 if (viewer) drawThreatDome(activeThreatData);
             }
+            if (payload.restrictedAreas) activeRestrictedAreas = payload.restrictedAreas;
+            if (payload.uasAreas) activeUasAreas = payload.uasAreas;
+            if (viewer) {
+                drawAirspaceVolumes(activeRestrictedAreas, '#0080FF', '🚧 ');
+                drawAirspaceVolumes(activeUasAreas, '#FF9800', '🛸 ');
+            }
             if (payload.gpx) {
                 parseGPXText(payload.gpx);
                 gpxLoadedFromStorage = true;
@@ -555,6 +631,19 @@ window.onload = () => {
             } catch (e) {
                 console.error(e);
             }
+        }
+
+        try {
+            const storedRestricted = sessionStorage.getItem('mission_restricted_areas');
+            if (storedRestricted) activeRestrictedAreas = JSON.parse(storedRestricted) || [];
+            const storedUas = sessionStorage.getItem('mission_uas_areas');
+            if (storedUas) activeUasAreas = JSON.parse(storedUas) || [];
+            if (viewer) {
+                drawAirspaceVolumes(activeRestrictedAreas, '#0080FF', '🚧 ');
+                drawAirspaceVolumes(activeUasAreas, '#FF9800', '🛸 ');
+            }
+        } catch (e) {
+            console.error(e);
         }
 
         const storedGpx = sessionStorage.getItem('mission_gpx');
@@ -581,6 +670,8 @@ window.addEventListener('message', (event) => {
         if (event.data.threat) {
             activeThreatData = event.data.threat;
         }
+        if (event.data.restrictedAreas) activeRestrictedAreas = event.data.restrictedAreas;
+        if (event.data.uasAreas) activeUasAreas = event.data.uasAreas;
         if (event.data.gpx) {
             parseGPXText(event.data.gpx);
         }

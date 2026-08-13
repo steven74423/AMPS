@@ -1665,6 +1665,41 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             link.click();
         };
 
+        // 取得目前地圖上「勾選中」的限制空域/UAS訓練空域，供 3D PVW 使用
+        function getActiveRestrictedAreas() {
+            if (typeof RESTRICTED_AREAS_DATA === 'undefined' || !map.hasLayer(restrictedAreaLayer)) return [];
+            return RESTRICTED_AREAS_DATA.areas
+                .filter(area => {
+                    const sub = restrictedAreaSubLayers[area.id];
+                    return sub && restrictedAreaLayer.hasLayer(sub);
+                })
+                .map(area => ({
+                    id: area.id,
+                    name: getAreaDisplayName(area),
+                    geometry_type: area.geometry_type,
+                    geometry: area.geometry,
+                    upper_limit_ft: area.upper_limit_ft,
+                    lower_limit_ft: area.lower_limit_ft
+                }));
+        }
+
+        function getActiveUasAreas() {
+            if (typeof UAS_AREAS_DATA === 'undefined' || !map.hasLayer(uasAreaLayer)) return [];
+            return UAS_AREAS_DATA.areas
+                .filter(area => {
+                    const sub = uasAreaSubLayers[area.id];
+                    return sub && uasAreaLayer.hasLayer(sub);
+                })
+                .map(area => ({
+                    id: area.id,
+                    name: getAreaDisplayName(area),
+                    geometry_type: area.geometry_type,
+                    geometry: area.geometry,
+                    upper_limit_ft: area.upper_limit_ft,
+                    lower_limit_ft: area.lower_limit_ft
+                }));
+        }
+
         document.getElementById('export-gpx-btn').onclick = () => {
             if (waypoints.length < 2) return alert("請至少設定兩個航點");
 
@@ -1766,7 +1801,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
 
             // Save GPX to sessionStorage for 3D analysis
             sessionStorage.setItem('mission_gpx', gpx);
-            
+
             // Save missile threat data for 3D analysis
             let threatData = null;
             if (typeof lastMissileLatLng !== 'undefined' && lastMissileLatLng) {
@@ -1785,13 +1820,26 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 sessionStorage.removeItem('mission_threat'); // clear if none
             }
 
+            // 目前地圖上有勾選顯示的限制空域/UAS訓練空域，一併帶到 3D PVW
+            const restrictedAreasForExport = getActiveRestrictedAreas();
+            const uasAreasForExport = getActiveUasAreas();
+            sessionStorage.setItem('mission_restricted_areas', JSON.stringify(restrictedAreasForExport));
+            sessionStorage.setItem('mission_uas_areas', JSON.stringify(uasAreasForExport));
+
             // Store in global window object for cross-tab postMessage bridge (file:// fallback)
             window.latestGpxString = gpx;
             window.latestThreatData = threatData;
+            window.latestRestrictedAreas = restrictedAreasForExport;
+            window.latestUasAreas = uasAreasForExport;
 
             // 把資料直接掛在網址 hash 上：file:// 雙擊開啟時，每個檔案常被視為不同來源，
             // sessionStorage / window.opener 不保證能跨分頁使用，網址傳遞才是唯一保證能送達的方式
-            const missionPayload = encodeURIComponent(JSON.stringify({ gpx, threat: threatData }));
+            const missionPayload = encodeURIComponent(JSON.stringify({
+                gpx,
+                threat: threatData,
+                restrictedAreas: restrictedAreasForExport,
+                uasAreas: uasAreasForExport
+            }));
 
             // Open 3D analysis page
             window.open('FDR/analysis.html#data=' + missionPayload, '_blank');
@@ -1804,7 +1852,9 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     event.source.postMessage({
                         type: 'DELIVER_MISSION_DATA',
                         gpx: window.latestGpxString,
-                        threat: window.latestThreatData
+                        threat: window.latestThreatData,
+                        restrictedAreas: window.latestRestrictedAreas,
+                        uasAreas: window.latestUasAreas
                     }, '*');
                 }
             }
