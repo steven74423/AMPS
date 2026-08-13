@@ -2,7 +2,7 @@
 // APP_CONFIG 會是 undefined，避免整支 script 因此中斷，改為降級為停用 3D 地形 token
 if (typeof APP_CONFIG === 'undefined') {
     console.warn('js/config.js 不存在：Cesium 3D 地形 token 未設定，3D 預覽將無法載入地形資料。');
-    window.APP_CONFIG = { LOGIN_PASSWORD: null, OPENAIP_API_KEY: null, CESIUM_ION_TOKEN: null };
+    window.APP_CONFIG = { LOGIN_PASSWORD: null, CESIUM_ION_TOKEN: null };
 }
 
 let activeThreatData = null;

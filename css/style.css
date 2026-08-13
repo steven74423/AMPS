@@ -610,7 +610,7 @@
             white-space: nowrap !important;
         }
 
-        .aip-label {
+        .navaid-label {
             background: rgba(0, 0, 0, 0.8);
             border: 1px solid #00FFFF;
             color: #00FFFF;
@@ -618,7 +618,7 @@
             padding: 2px 5px;
         }
 
-        .aip-icon {
+        .navaid-icon {
             font-size: 1.5em;
             text-shadow: 2px 2px 2px #000;
         }

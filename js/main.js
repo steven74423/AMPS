@@ -1,8 +1,8 @@
 // --- 設定檔防呆：js/config.js 未被提交到 git，在沒有該檔案的環境(如剛 clone 下來或部署後)
         // APP_CONFIG 會是 undefined，避免整支 script 因此中斷，改為降級為停用相關功能 ---
         if (typeof APP_CONFIG === 'undefined') {
-            console.warn('js/config.js 不存在：登入密碼保護、OpenAIP 圖層、3D 地形 token 相關功能將被停用。請複製 js/config.example.js 為 js/config.js 並填入你的設定值。');
-            window.APP_CONFIG = { LOGIN_PASSWORD: null, OPENAIP_API_KEY: null, CESIUM_ION_TOKEN: null };
+            console.warn('js/config.js 不存在：登入密碼保護、3D 地形 token 相關功能將被停用。請複製 js/config.example.js 為 js/config.js 並填入你的設定值。');
+            window.APP_CONFIG = { LOGIN_PASSWORD: null, CESIUM_ION_TOKEN: null };
         }
 
         // --- 新增：禁用右鍵選單 ---
@@ -810,120 +810,51 @@
 
         let vfrSavedConfig = loadVfrConfig();
         const vfrOverlay = new VfrRotatedOverlay('vfr_chart.png', vfrSavedConfig.corners, { opacity: vfrSavedConfig.opacity });
-        const aipLayer = L.layerGroup();
+        // --- 助導航設施 (ENR 4.1 無線電助航設施－航路，取代舊版需要 API 金鑰的 OpenAIP 資料) ---
+        const navaidLayer = L.layerGroup();
 
-        // --- 替換：改用 OpenAIP 動態抓取 RCAA 範圍內資料 ---
-        const OPENAIP_API_KEY = APP_CONFIG.OPENAIP_API_KEY;
-
-        async function fetchOpenAipData() {
-            if (!OPENAIP_API_KEY) {
-                console.warn('未設定 OPENAIP_API_KEY，跳過機場與助導航資料下載。');
-                return;
-            }
-            try {
-                // 並發抓取台灣(TW)的機場與導航台資料
-                const [airportsRes, navaidsRes] = await Promise.all([
-                    fetch(`https://api.core.openaip.net/api/airports?apiKey=${OPENAIP_API_KEY}&country=TW&limit=150`),
-                    fetch(`https://api.core.openaip.net/api/navaids?apiKey=${OPENAIP_API_KEY}&country=TW&limit=150`)
-                ]);
-
-                if (!airportsRes.ok || !navaidsRes.ok) throw new Error("OpenAIP Fetch Failed");
-
-                const airportsData = await airportsRes.json();
-                const navaidsData = await navaidsRes.json();
-
-                // 處理機場資料
-                airportsData.items.forEach(apt => {
-                    if (!apt.geometry || !apt.geometry.coordinates) return;
-
-                    // 根據使用者要求，排除特定機場
-                    if (apt.icaoCode === "RCLG" || apt.icaoCode === "RCGM") return;
-
-                    const latlng = [apt.geometry.coordinates[1], apt.geometry.coordinates[0]];
-                    // 大型機場繪製半徑警示圈 (大約 5NM)
-                    L.circle(latlng, { radius: 9260, color: '#E066FF', dashArray: '10, 8', weight: 2, fill: false, opacity: 0.9 }).addTo(aipLayer);
-
-                    // 給圖示加上隱形背景 hitbox (有微量顏色)，保證瀏覽器能正確計算點擊命中
-                    const marker = L.marker(latlng, { icon: L.divIcon({ className: 'aip-icon', html: '<div style="width:30px;height:30px;background:rgba(255,255,255,0.01);cursor:pointer;border-radius:50%;">✈️</div>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
-                    let info = `${apt.icaoCode ? apt.icaoCode + ' ' : ''}${apt.name}`;
-                    // 讓標籤也可被點擊，轉發並攔截事件
-                    marker.bindTooltip(info, { permanent: true, direction: 'top', offset: [0, -10], className: 'aip-label', interactive: true });
-
-                    // 強制攔截點擊事件，直接開啟 Popup 並阻止傳遞給地圖
-                    const clickHandler = (e) => {
-                        if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
-                        marker.openPopup();
-                    };
-                    marker.on('click', clickHandler);
-                    marker.getTooltip().on('click', clickHandler);
-
-                    // --- 建立點擊顯示資料方塊 (Popup) ---
-                    let popupHtml = `<div style="color: #333; line-height: 1.5; min-width: 160px;">`;
-                    popupHtml += `<div style="font-weight:bold; font-size:1.1em; color:#E066FF;">🛫 ${info}</div><hr style="margin: 5px 0; border:0; border-top:1px solid #ccc;">`;
-                    if (apt.elevation && apt.elevation.value !== undefined) {
-                        const elevFt = apt.elevation.unit === 0 ? Math.round(apt.elevation.value * 3.28084) : apt.elevation.value;
-                        popupHtml += `⛰️ <b>標高：</b> ${elevFt} FT<br>`;
-                    }
-                    if (apt.runways && apt.runways.length > 0) {
-                        // 過濾出主要跑道，並過濾掉重複設計編號
-                        let rwyStrs = apt.runways.map(r => `RWY ${r.designator} (${r.dimension?.length?.value || '?'}m)`);
-                        let uniqueRwys = [...new Set(rwyStrs)];
-                        popupHtml += `🛣️ <b>跑道：</b><br><div style="padding-left:15px; font-size:0.9em;">${uniqueRwys.join('<br>')}</div>`;
-                    }
-                    if (apt.frequencies && apt.frequencies.length > 0) {
-                        const freqs = apt.frequencies.map(f => `${f.name || 'FREQ'} : <strong style="color:#0055ff;">${f.value}</strong>`);
-                        popupHtml += `📻 <b>通訊頻率：</b><br><div style="padding-left:15px; font-size:0.9em;">${freqs.join('<br>')}</div>`;
-                    }
-                    popupHtml += `</div>`;
-                    marker.bindPopup(popupHtml);
-
-                    aipLayer.addLayer(marker);
-                });
-
-                // 處理導航台資料 (VOR / NDB 等)
-                navaidsData.items.forEach(nav => {
-                    if (!nav.geometry || !nav.geometry.coordinates) return;
-                    const latlng = [nav.geometry.coordinates[1], nav.geometry.coordinates[0]];
-                    const marker = L.marker(latlng, { icon: L.divIcon({ className: 'aip-icon', html: '<div style="width:30px;height:30px;background:rgba(255,255,255,0.01);cursor:pointer;border-radius:50%;">📡</div>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
-                    let freq = nav.frequencies && nav.frequencies.length > 0 ? nav.frequencies[0].value : "";
-                    let info = `${nav.designator || ''} ${nav.name}`;
-
-                    let tooltipInfo = info;
-                    if (freq) tooltipInfo += `<br><span style="color:#FFFF00">${freq}</span>`;
-                    marker.bindTooltip(tooltipInfo, { permanent: true, direction: 'top', offset: [0, -10], className: 'aip-label', interactive: true });
-
-                    // 強制攔截點擊事件，直接開啟 Popup 並阻止傳遞給地圖
-                    const clickHandler = (e) => {
-                        if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
-                        marker.openPopup();
-                    };
-                    marker.on('click', clickHandler);
-                    marker.getTooltip().on('click', clickHandler);
-
-                    // --- 建立點擊顯示資料方塊 (Popup) ---
-                    let popupHtml = `<div style="color: #333; line-height: 1.5; min-width: 140px;">`;
-                    popupHtml += `<div style="font-weight:bold; font-size:1.1em; color:#00FFFF; text-shadow: 1px 1px 1px #000;">📡 ${info}</div><hr style="margin: 5px 0; border:0; border-top:1px solid #ccc;">`;
-                    if (nav.elevation && nav.elevation.value !== undefined) {
-                        const elevFt = nav.elevation.unit === 0 ? Math.round(nav.elevation.value * 3.28084) : nav.elevation.value;
-                        popupHtml += `⛰️ <b>標高：</b> ${elevFt} FT<br>`;
-                    }
-                    if (nav.frequencies && nav.frequencies.length > 0) {
-                        const freqs = nav.frequencies.map(f => `<strong style="color:#0055ff;">${f.value}</strong>`);
-                        popupHtml += `📻 <b>頻率：</b><br><div style="padding-left:15px;">${freqs.join(', ')}</div>`;
-                    }
-                    popupHtml += `</div>`;
-                    marker.bindPopup(popupHtml);
-
-                    aipLayer.addLayer(marker);
-                });
-
-            } catch (e) {
-                console.error("載入 OpenAIP 資料失敗:", e);
-            }
+        function navaidIcon(type) {
+            if (type === 'NDB') return '🔵';
+            if (type === 'DME') return '⬥';
+            return '📡'; // VOR/DME 等
         }
 
-        // 呼叫抓取函式
-        fetchOpenAipData();
+        function buildNavaidPopup(n) {
+            let html = `<div style="color: #333; line-height: 1.5; min-width: 160px;">`;
+            html += `<div style="font-weight:bold; font-size:1.1em; color:#00FFFF; text-shadow: 1px 1px 1px #000;">${navaidIcon(n.type)} ${n.id} ${n.name}</div><hr style="margin: 5px 0; border:0; border-top:1px solid #ccc;">`;
+            html += `<b>類型：</b> ${n.type}<br>`;
+            html += `<b>頻率：</b> ${n.freq}<br>`;
+            if (n.magnetic_variation) html += `<b>磁差：</b> ${n.magnetic_variation}<br>`;
+            if (n.elevation_ft != null) html += `⛰️ <b>標高：</b> ${n.elevation_ft} FT<br>`;
+            if (n.remarks) html += `<div style="margin-top:4px; font-size:0.9em; color:#555;">⚠️ ${n.remarks}</div>`;
+            html += `</div>`;
+            return html;
+        }
+
+        function initNavaids() {
+            if (typeof NAVAIDS_DATA === 'undefined' || !NAVAIDS_DATA.navaids) return;
+
+            NAVAIDS_DATA.navaids.forEach(n => {
+                const latlng = [n.coordinates[1], n.coordinates[0]];
+                const icon = navaidIcon(n.type);
+                const marker = L.marker(latlng, { icon: L.divIcon({ className: 'navaid-icon', html: `<div style="width:30px;height:30px;background:rgba(255,255,255,0.01);cursor:pointer;border-radius:50%;">${icon}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }) });
+
+                let tooltipInfo = `${n.id} ${n.name}<br><span style="color:#FFFF00">${n.freq}</span>`;
+                marker.bindTooltip(tooltipInfo, { permanent: true, direction: 'top', offset: [0, -10], className: 'navaid-label', interactive: true });
+
+                // 強制攔截點擊事件，直接開啟 Popup 並阻止傳遞給地圖
+                const clickHandler = (e) => {
+                    if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                    marker.openPopup();
+                };
+                marker.on('click', clickHandler);
+                marker.bindPopup(buildNavaidPopup(n));
+                marker.getTooltip().on('click', clickHandler);
+
+                navaidLayer.addLayer(marker);
+            });
+        }
+        initNavaids();
 
         // --- 機場天氣 (METAR，資料源: NOAA Aviation Weather Center，免金鑰) ---
         const WEATHER_ICAO_CODES = ['RCTP', 'RCSS', 'RCKH', 'RCMQ', 'RCFN', 'RCNN', 'RCYU', 'RCQC', 'RCGI', 'RCFG', 'RCMT'];
@@ -1021,7 +952,7 @@
             "🚨 MSA地障警示": msaLayer,
             "🛡️ 防空隱蔽分析": missileLayer,
             "🌑 夜間陰影區": nightShadowGroup,
-            "✈️ 機場與助導航": aipLayer,
+            "✈️ 機場與助導航": navaidLayer,
             "📄 VFR目視航路": vfrOverlay,
             "🚧 限制空域": restrictedAreaLayer,
             "🛸 UAS訓練空域": uasAreaLayer,
@@ -1458,8 +1389,8 @@
                 if (e.originalEvent.target.closest('.leaflet-popup') ||
                     e.originalEvent.target.closest('.leaflet-marker-icon') ||
                     e.originalEvent.target.closest('.leaflet-tooltip') ||
-                    e.originalEvent.target.closest('.aip-icon') ||
-                    e.originalEvent.target.closest('.aip-label')) {
+                    e.originalEvent.target.closest('.navaid-icon') ||
+                    e.originalEvent.target.closest('.navaid-label')) {
                     return;
                 }
             }
