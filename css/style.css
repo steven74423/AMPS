@@ -18,55 +18,6 @@
             background: #222;
         }
 
-        /* --- 🔒 密碼驗證層 --- */
-        #auth-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            color: #00FFFF;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 10000;
-        }
-
-        #auth-container {
-            text-align: center;
-            padding: 40px;
-            border: 2px solid #00FFFF;
-            border-radius: 15px;
-            background: #1a1a1a;
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
-        }
-
-        #password-input {
-            padding: 12px;
-            font-size: 1.2em;
-            border: 1px solid #00FFFF;
-            border-radius: 5px;
-            background: #333;
-            color: #fff;
-            margin-bottom: 20px;
-            outline: none;
-            width: 220px;
-            text-align: center;
-        }
-
-        #login-btn {
-            padding: 12px 40px;
-            font-size: 1.2em;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
         /* 地圖容器 (高度配合控制板調整) */
         #map {
             height: 100vh;
@@ -104,6 +55,11 @@
             align-items: center;
             width: 100%;
             height: 32px;
+        }
+
+        /* 主要操作列(DEL/3D PVW/PLAN/AI)：拉高到 44px 符合手機觸控目標建議尺寸 */
+        .main-actions-row {
+            height: 44px;
         }
 
         /* 輸入框組 */
@@ -728,6 +684,36 @@
                 width: 100%;
                 justify-content: space-between;
             }
+
+            /* 限制空域／UAS訓練空域面板：手機上寬度不夠並排(230+230+間距 > 大多數手機螢幕寬)，
+               改成上下堆疊、各自佔滿寬度，同時開啟也不會互相重疊 */
+            #restricted-area-panel,
+            #uas-area-panel {
+                left: 10px;
+                right: 10px;
+                width: auto;
+            }
+
+            #restricted-area-panel {
+                top: 60px;
+                max-height: 35vh;
+            }
+
+            #uas-area-panel {
+                top: calc(35vh + 70px);
+                max-height: 35vh;
+            }
+
+            /* 雷達播放器：min-width:350px 在窄手機上會超出螢幕，改成貼邊彈性寬度 */
+            #radar-player-ctrl {
+                left: 10px;
+                right: 10px;
+                transform: none;
+                min-width: 0;
+                width: auto;
+                padding: 5px 10px;
+                gap: 8px;
+            }
         }
 
         /* --- 新增：比例尺與縮放控制項排版 --- */
@@ -1111,58 +1097,104 @@
             padding: 10px;
         }
 
-        .plan-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85em;
-            color: #ddd;
+        /* 航點卡片(取代原本的橫向表格，手機直向堆疊比較看得到/摸得到每個欄位) */
+        .plan-card {
+            background: #202020;
+            border: 1px solid #3a3a3a;
+            border-left: 3px solid var(--tac-cyan);
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
         }
 
-        .plan-table th,
-        .plan-table td {
-            border: 1px solid #444;
-            padding: 6px;
-            text-align: center;
+        .plan-card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
-        .plan-table th {
-            background: #222;
-            color: #00FFFF;
-            position: sticky;
-            top: 0;
-            z-index: 2;
-        }
-
-        .plan-table input {
+        .plan-name-input {
+            flex: 1;
+            min-width: 0;
+            min-height: 40px;
             background: #111;
             border: 1px solid #555;
             color: #fff;
-            padding: 4px;
-            width: 100%;
+            padding: 8px;
+            font-size: 1em;
             box-sizing: border-box;
-            text-align: center;
             border-radius: 3px;
         }
 
-        .plan-table input:focus {
+        .plan-name-input:focus {
             border-color: #00FFFF;
             outline: none;
+        }
+
+        .plan-delete-btn {
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+            background: #3a1414;
+            border: 1px solid #dc3545;
+            color: #ff8888;
+            border-radius: 4px;
+            font-size: 1.1em;
+            cursor: pointer;
+        }
+
+        .plan-delete-btn:hover {
+            background: #dc3545;
+            color: #fff;
+        }
+
+        .plan-card-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.82em;
+            color: #FFFF00;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed #444;
+        }
+
+        .plan-card-field {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 0;
+        }
+
+        .plan-card-field label {
+            color: #00FFFF;
+            font-size: 0.82em;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .plan-card-endnote {
+            text-align: center;
+            color: #888;
+            font-size: 0.82em;
+            padding: 4px 0;
         }
 
         .stepper {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 100%;
         }
 
         .stepper button {
             background: #333;
             color: #00FFFF;
             border: 1px solid #555;
-            padding: 2px 6px;
+            min-width: 36px;
+            min-height: 36px;
             cursor: pointer;
-            font-size: 1.1em;
+            font-size: 1.2em;
             font-weight: bold;
             flex-shrink: 0;
             border-radius: 3px;
@@ -1173,8 +1205,11 @@
         }
 
         .stepper input {
-            min-width: 35px;
+            min-width: 50px;
+            min-height: 36px;
             margin: 0 4px;
+            text-align: center;
+            font-size: 1em;
             -moz-appearance: textfield;
         }
 
@@ -1207,6 +1242,11 @@
         }
 
         /* --- VFR 圖校正控制列 (整合進底部工具列) --- */
+        #vfr-calib-actions {
+            flex-wrap: wrap;
+            padding: 4px 0;
+        }
+
         #vfr-calib-actions button:hover {
             background: #FFFF00 !important;
             color: #000 !important;

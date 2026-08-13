@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <title>航空計畫工具 - 介面精修版</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="./css/style.css?v=5" />
+    <link rel="stylesheet" href="./css/style.css?v=6" />
 </head>
 
 <body>
@@ -104,7 +104,7 @@
     <div id="map"></div>
 
     <div id="controls">
-        <div class="control-row">
+        <div class="control-row main-actions-row">
             <button id="delete-btn" class="btn btn-delete" style="margin-left: auto;">DEL</button>
             <button id="export-gpx-btn" class="btn btn-export" style="background:linear-gradient(135deg,#005f00,#003f00); border: 1px solid #00FF00; color:#00FF00;" title="匯出 GPX">3D PVW</button>
             <button id="plan-btn" class="btn"
@@ -192,7 +192,7 @@
             </div>
         </div>
 
-        <div id="ctrl-vfr" class="control-row" style="display: none;">
+        <div id="ctrl-vfr" class="control-row" style="height: auto; min-height: 32px; display: none;">
             <button id="btn-vfr-calibrate" class="btn"
                 style="background: linear-gradient(135deg,#5f5f00,#3f3f00); border: 1px solid #FFFF00; color:#FFFF00;">🎯
                 校正VFR圖位置</button>
@@ -268,7 +268,7 @@
     <script src="./js/restricted_areas_data.js"></script>
     <script src="./js/uas_areas_data.js"></script>
     <script src="./js/config.js"></script>
-<script defer src="./js/main.js?v=5"></script>
+<script defer src="./js/main.js?v=6"></script>
 </body>
 
 </html>

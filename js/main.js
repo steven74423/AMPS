@@ -2114,29 +2114,28 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             }
         }
 
-        function renderPlanPanel() {
-            const k = 120;
+        function deleteWaypointAt(i) {
+            if (i < 0 || i >= waypoints.length) return;
+            const defaultTitle = i === 0 ? 'SP' : `ACP ${i}`;
+            const name = (markers[i] && markers[i].customName) ? markers[i].customName : defaultTitle;
+            if (!confirm(`確定要刪除航點「${name}」嗎？`)) return;
 
+            map.removeLayer(markers[i]);
+            waypoints.splice(i, 1);
+            markers.splice(i, 1);
+            updatePlan();
+            if (isPowerLayerActive) loadPowerLines();
+            renderPlanPanel();
+        }
+
+        function renderPlanPanel() {
             planPanelBody.innerHTML = '';
             if (waypoints.length === 0) {
                 planPanelBody.innerHTML = '<p style="text-align:center; color:#ccc;">尚無航點</p>';
                 return;
             }
 
-            let html = `
-                <table class="plan-table">
-                    <thead>
-                        <tr>
-                            <th>航點名稱</th>
-                            <th>時間</th>
-                            <th>段油耗(lb)</th>
-                            <th style="width:115px;">高度(ft)</th>
-                            <th style="width:105px;">空速(KT)</th>
-                            <th style="width:110px;">耗油率(lb/h)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
+            let html = '';
 
             waypoints.forEach((pt, i) => {
                 let defaultTitle = i === 0 ? "SP" : `ACP ${i}`;
@@ -2152,7 +2151,8 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 let fuelRate = (markers[i] && markers[i].customFuelRate) ? markers[i].customFuelRate : 800;
 
                 let t = "---", f = "---";
-                if (i < waypoints.length - 1) {
+                const isLast = i === waypoints.length - 1;
+                if (!isLast) {
                     const next = waypoints[i + 1];
                     const dist = turf.distance([pt.lng, pt.lat], [next.lng, next.lat], { units: 'nauticalmiles' });
 
@@ -2169,39 +2169,44 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 }
 
                 html += `
-                    <tr>
-                        <td><input type="text" id="plan-name-${i}" value="${name}"></td>
-                        <td>${t}</td>
-                        <td>${f}</td>
-                        <td>
-                            ${i < waypoints.length - 1 ? `
+                    <div class="plan-card">
+                        <div class="plan-card-header">
+                            <input type="text" id="plan-name-${i}" value="${name}" class="plan-name-input">
+                            <button type="button" class="plan-delete-btn" onclick="deleteWaypointAt(${i})" title="刪除此航點">🗑</button>
+                        </div>
+                        <div class="plan-card-meta">
+                            <span>⏱ ${t}</span>
+                            <span>⛽ ${f} lb</span>
+                        </div>
+                        ${!isLast ? `
+                        <div class="plan-card-field">
+                            <label>高度(ft)</label>
                             <div class="stepper">
                                 <button type="button" onclick="stepPlanValue('plan-alt-${i}', -100)">-</button>
                                 <input type="number" id="plan-alt-${i}" value="${alt}">
                                 <button type="button" onclick="stepPlanValue('plan-alt-${i}', 100)">+</button>
-                            </div>` : '---'}
-                        </td>
-                        <td>
-                            ${i < waypoints.length - 1 ? `
+                            </div>
+                        </div>
+                        <div class="plan-card-field">
+                            <label>空速(KT)</label>
                             <div class="stepper">
                                 <button type="button" onclick="stepPlanValue('plan-spd-${i}', -5)">-</button>
                                 <input type="number" id="plan-spd-${i}" value="${spd}">
                                 <button type="button" onclick="stepPlanValue('plan-spd-${i}', 5)">+</button>
-                            </div>` : '---'}
-                        </td>
-                        <td>
-                            ${i < waypoints.length - 1 ? `
+                            </div>
+                        </div>
+                        <div class="plan-card-field">
+                            <label>耗油率(lb/h)</label>
                             <div class="stepper">
                                 <button type="button" onclick="stepPlanValue('plan-fuelrate-${i}', -10)">-</button>
                                 <input type="number" id="plan-fuelrate-${i}" value="${fuelRate}">
                                 <button type="button" onclick="stepPlanValue('plan-fuelrate-${i}', 10)">+</button>
-                            </div>` : '---'}
-                        </td>
-                    </tr>
+                            </div>
+                        </div>` : `<div class="plan-card-endnote">終點（無後續航段）</div>`}
+                    </div>
                 `;
             });
 
-            html += `</tbody></table>`;
             planPanelBody.innerHTML = html;
         }
 
