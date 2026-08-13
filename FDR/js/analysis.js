@@ -8,6 +8,7 @@ if (typeof APP_CONFIG === 'undefined') {
 let activeThreatData = null;
 let activeRestrictedAreas = [];
 let activeUasAreas = [];
+let activePowerLines = null;
 /**
  * FDR-Alpha Analysis Logic
  * Handles GPX parsing, chart rendering, and map playback.
@@ -274,6 +275,46 @@ function drawAirspaceVolumes(areas, colorHex, labelPrefix) {
     });
 }
 
+// 畫出已下載的高壓電纜線段/電塔，紅色點線表示，貼地顯示(沒有實際電線離地高度資料)
+function drawPowerLines(powerData) {
+    if (!viewer || !powerData) return;
+    try {
+        (powerData.lines || []).forEach(line => {
+            if (!line || line.length < 2) return;
+            const flat = [];
+            line.forEach(p => { flat.push(p[0], p[1]); });
+            viewer.entities.add({
+                name: '高壓電纜',
+                polyline: {
+                    positions: Cesium.Cartesian3.fromDegreesArray(flat),
+                    width: 3,
+                    clampToGround: true,
+                    material: new Cesium.PolylineDashMaterialProperty({
+                        color: Cesium.Color.RED,
+                        dashLength: 16
+                    })
+                }
+            });
+        });
+
+        (powerData.towers || []).forEach(t => {
+            viewer.entities.add({
+                name: '電塔',
+                position: Cesium.Cartesian3.fromDegrees(t[0], t[1]),
+                point: {
+                    pixelSize: 6,
+                    color: Cesium.Color.RED,
+                    outlineColor: Cesium.Color.BLACK,
+                    outlineWidth: 1,
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                }
+            });
+        });
+    } catch (e) {
+        console.error('Error drawing power lines:', e);
+    }
+}
+
 function initCesium() {
     if (viewer || typeof Cesium === 'undefined') return;
 
@@ -407,6 +448,9 @@ function updateUI() {
         }
         if (activeUasAreas && activeUasAreas.length) {
             drawAirspaceVolumes(activeUasAreas, '#FF9800', '🛸 ');
+        }
+        if (activePowerLines) {
+            drawPowerLines(activePowerLines);
         }
 
         const coords = [];
@@ -720,9 +764,11 @@ window.onload = () => {
             }
             if (payload.restrictedAreas) activeRestrictedAreas = payload.restrictedAreas;
             if (payload.uasAreas) activeUasAreas = payload.uasAreas;
+            if (payload.powerLines) activePowerLines = payload.powerLines;
             if (viewer) {
                 drawAirspaceVolumes(activeRestrictedAreas, '#0080FF', '🚧 ');
                 drawAirspaceVolumes(activeUasAreas, '#FF9800', '🛸 ');
+                drawPowerLines(activePowerLines);
             }
             if (payload.gpx) {
                 parseGPXText(payload.gpx);
@@ -750,9 +796,12 @@ window.onload = () => {
             if (storedRestricted) activeRestrictedAreas = JSON.parse(storedRestricted) || [];
             const storedUas = sessionStorage.getItem('mission_uas_areas');
             if (storedUas) activeUasAreas = JSON.parse(storedUas) || [];
+            const storedPower = sessionStorage.getItem('mission_power_lines');
+            if (storedPower) activePowerLines = JSON.parse(storedPower) || null;
             if (viewer) {
                 drawAirspaceVolumes(activeRestrictedAreas, '#0080FF', '🚧 ');
                 drawAirspaceVolumes(activeUasAreas, '#FF9800', '🛸 ');
+                drawPowerLines(activePowerLines);
             }
         } catch (e) {
             console.error(e);
@@ -784,6 +833,7 @@ window.addEventListener('message', (event) => {
         }
         if (event.data.restrictedAreas) activeRestrictedAreas = event.data.restrictedAreas;
         if (event.data.uasAreas) activeUasAreas = event.data.uasAreas;
+        if (event.data.powerLines) activePowerLines = event.data.powerLines;
         if (event.data.gpx) {
             parseGPXText(event.data.gpx);
         }

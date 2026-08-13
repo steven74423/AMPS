@@ -1700,6 +1700,23 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 }));
         }
 
+        // 取得目前地圖上已下載、勾選顯示中的高壓電纜線段/電塔點位，供 3D PVW 使用
+        function getActivePowerLines() {
+            if (!map.hasLayer(powerLayer)) return { lines: [], towers: [] };
+            const lines = [];
+            const towers = [];
+            powerLayer.eachLayer(layer => {
+                if (layer instanceof L.CircleMarker) {
+                    const ll = layer.getLatLng();
+                    towers.push([ll.lng, ll.lat]);
+                } else if (layer instanceof L.Polyline) {
+                    const latlngs = layer.getLatLngs().map(ll => [ll.lng, ll.lat]);
+                    if (latlngs.length > 1) lines.push(latlngs);
+                }
+            });
+            return { lines, towers };
+        }
+
         document.getElementById('export-gpx-btn').onclick = () => {
             if (waypoints.length < 2) return alert("請至少設定兩個航點");
 
@@ -1826,11 +1843,16 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             sessionStorage.setItem('mission_restricted_areas', JSON.stringify(restrictedAreasForExport));
             sessionStorage.setItem('mission_uas_areas', JSON.stringify(uasAreasForExport));
 
+            // 目前已下載、勾選顯示中的高壓電纜(塔)資料，一併帶到 3D PVW
+            const powerLinesForExport = getActivePowerLines();
+            sessionStorage.setItem('mission_power_lines', JSON.stringify(powerLinesForExport));
+
             // Store in global window object for cross-tab postMessage bridge (file:// fallback)
             window.latestGpxString = gpx;
             window.latestThreatData = threatData;
             window.latestRestrictedAreas = restrictedAreasForExport;
             window.latestUasAreas = uasAreasForExport;
+            window.latestPowerLines = powerLinesForExport;
 
             // 把資料直接掛在網址 hash 上：file:// 雙擊開啟時，每個檔案常被視為不同來源，
             // sessionStorage / window.opener 不保證能跨分頁使用，網址傳遞才是唯一保證能送達的方式
@@ -1838,7 +1860,8 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 gpx,
                 threat: threatData,
                 restrictedAreas: restrictedAreasForExport,
-                uasAreas: uasAreasForExport
+                uasAreas: uasAreasForExport,
+                powerLines: powerLinesForExport
             }));
 
             // Open 3D analysis page
@@ -1854,7 +1877,8 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                         gpx: window.latestGpxString,
                         threat: window.latestThreatData,
                         restrictedAreas: window.latestRestrictedAreas,
-                        uasAreas: window.latestUasAreas
+                        uasAreas: window.latestUasAreas,
+                        powerLines: window.latestPowerLines
                     }, '*');
                 }
             }
