@@ -856,6 +856,59 @@
         }
         initNavaids();
 
+        // --- 機場資料 (eAIP AD 2：跑道/空域/通訊/助導航/起飛天氣限度)，併入同一個「機場與助導航」圖層 ---
+        function buildAirportPopup(a) {
+            let html = `<div style="color:#333; line-height:1.5; min-width:220px; max-width:300px; font-size:0.85em;">`;
+            html += `<div style="font-weight:bold; font-size:1.15em; color:#E066FF;">🛫 ${a.id} ${a.name_zh} (${a.name_en})</div>`;
+            html += `<div style="color:#666; font-size:0.85em; margin-bottom:4px;">機場標高 ${a.elevation_ft != null ? a.elevation_ft + ' FT' : '-'}${a.ref_temp_c != null ? '　參考溫度 ' + a.ref_temp_c + '°C' : ''}</div>`;
+            html += `<hr style="margin:5px 0; border:0; border-top:1px solid #ccc;">`;
+
+            if (a.runways && a.runways.length) {
+                html += `<b>🛬 跑道頭/著陸區標高：</b><br><div style="padding-left:10px;">${a.runways.join('<br>')}</div>`;
+            }
+            if (a.airspace_vertical_limits || a.airspace_classification) {
+                html += `<b>📐 空域上下限：</b> ${a.airspace_vertical_limits || '無資料'}<br>`;
+                html += `<b>🗂️ 空域類別：</b> ${a.airspace_classification || '無資料'}<br>`;
+            }
+            if (a.communications && a.communications.length) {
+                html += `<b>📻 飛航服務通訊：</b><br><div style="padding-left:10px;">${a.communications.join('<br>')}</div>`;
+            }
+            if (a.navaids && a.navaids.length) {
+                html += `<b>🧭 無線電助導航設施：</b><br><div style="padding-left:10px; font-size:0.92em;">${a.navaids.join('<br>')}</div>`;
+            }
+            if (a.departure_minima && a.departure_minima.length) {
+                html += `<b>🌫️ 儀器飛航起飛天氣限度：</b><br><div style="padding-left:10px;">${a.departure_minima.join('<br>')}</div>`;
+            }
+            if (a.remarks && a.remarks.length) {
+                html += `<div style="margin-top:6px; padding-top:4px; border-top:1px dashed #ccc; font-size:0.9em; color:#555;">⚠️ ${a.remarks.join('；')}</div>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        function initAirports() {
+            if (typeof AD2_AIRPORTS_DATA === 'undefined' || !AD2_AIRPORTS_DATA.airports) return;
+
+            AD2_AIRPORTS_DATA.airports.forEach(a => {
+                if (!a.arp_coordinates) return;
+                const latlng = [a.arp_coordinates[1], a.arp_coordinates[0]];
+                const marker = L.marker(latlng, { icon: L.divIcon({ className: 'navaid-icon', html: '<div style="width:30px;height:30px;background:rgba(255,255,255,0.01);cursor:pointer;border-radius:50%;">✈️</div>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
+
+                marker.bindTooltip(`${a.id} ${a.name_zh}`, { permanent: true, direction: 'top', offset: [0, -10], className: 'navaid-label', interactive: true });
+
+                const clickHandler = (e) => {
+                    if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                    marker.openPopup();
+                };
+                marker.on('click', clickHandler);
+                marker.bindPopup(buildAirportPopup(a), { maxHeight: 380, maxWidth: 300 });
+                marker.getTooltip().on('click', clickHandler);
+
+                navaidLayer.addLayer(marker); // 跟助導航設施共用同一個「機場與助導航」圖層
+            });
+        }
+        initAirports();
+
         // --- 機場天氣 (METAR，資料源: NOAA Aviation Weather Center，免金鑰) ---
         const WEATHER_ICAO_CODES = ['RCTP', 'RCSS', 'RCKH', 'RCMQ', 'RCFN', 'RCNN', 'RCYU', 'RCQC', 'RCGI', 'RCFG', 'RCMT'];
         const weatherLayer = L.layerGroup();

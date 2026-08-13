@@ -1,0 +1,726 @@
+﻿// 資料來源: ad2_airports.json (eAIP AD 2 機場資料)
+const AD2_AIRPORTS_DATA = {
+  "source": "R.O.C. Taiwan CAA eAIP AIRAC AIP AMDT 03/26, effective 06 AUG 2026",
+  "section": "AD 2 機場資料 (跑道/空域/通訊/助導航/起飛天氣限度摘要)",
+  "source_url_example": "https://ais.caa.gov.tw/eaip/AIRAC%20AIP%20AMDT%2003-26_2026_08_06/eAIP/RC-AD%202%20RCBS%20%E9%87%91%E9%96%80KINMEN-zh-TW.html",
+  "coordinate_note": "arp_coordinates 為機場基準點 [經度, 緯度] (WGS84, GeoJSON [lon,lat] 順序)",
+  "count": 19,
+  "airports": [
+    {
+      "id": "RCBS",
+      "name_zh": "金門",
+      "name_en": "KINMEN",
+      "arp_dms": "242544N 1182140E",
+      "arp_note": "跑道中心點(自06跑道移位門檻至24跑道門檻)",
+      "elevation_ft": 56,
+      "ref_temp_c": 31,
+      "runways": [
+        "06：跑道頭標高 45 FT，著陸區最高點標高 45 FT",
+        "24：跑道頭標高 18 FT，著陸區最高點標高 28 FT"
+      ],
+      "airspace_vertical_limits": "3000FT MSL",
+      "airspace_classification": "機場航線空域，位於金門 Class D 空域 (Aerodrome traffic circuit, Kinmen Class D Airspace)",
+      "remarks": [
+        "高雄近場管制塔臺負責此空域內所有儀器飛航之管制",
+        "於目視天氣情況時，金門塔臺負責機場航線上航空器活動之管制",
+        "固定翼航空器不得實施特種目視飛航",
+        "金門機場使用東航線"
+      ],
+      "communications": [
+        "ATIS：KINMEN AIRPORT 127.20 MHZ",
+        "TWR：KINMEN TOWER 118.00 / 121.50 / 126.20 / 236.60 / 243.00 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY06：LOC 108.90 MHZ(ICKM) 242605.6N 1182226.8E；GP 329.30 MHZ 滑降角3° RDH51FT；DME CH26X 高度50FT",
+        "ILS RWY24：LOC 110.70 MHZ(ICSY) 242515.4N 1182037.1E；GP 330.20 MHZ 滑降角3.1° RDH55FT；DME CH44X 高度31FT",
+        "NDB(BS)：345.00 KHZ，242535.3N 1182056.9E，磁差04°W"
+      ],
+      "departure_minima": [
+        "1具引擎：能見度/RVR 500M（日間，無標線）",
+        "2具引擎：能見度/RVR 800M",
+        "3具引擎：能見度/RVR 800M",
+        "4具引擎：能見度/RVR 800M"
+      ],
+      "arp_coordinates": [
+        118.361111,
+        24.428889
+      ]
+    },
+    {
+      "id": "RCCM",
+      "name_zh": "七美",
+      "name_en": "QIMEI",
+      "arp_dms": "231247N 1192503E",
+      "arp_note": "跑道02/20中心點",
+      "elevation_ft": 63,
+      "ref_temp_c": 33,
+      "runways": [
+        "02：跑道頭標高 53 FT",
+        "20：跑道頭標高 49 FT"
+      ],
+      "airspace_vertical_limits": null,
+      "airspace_classification": null,
+      "remarks": [
+        "APAPI不具備光強度控制裝置，不符ANNEX14之規定（跑道02/20皆同）"
+      ],
+      "communications": [
+        "TWR：QIMEI TOWER 118.10 MHZ；121.50 MHZ(緊急)，作業時間 2300-1000 UTC"
+      ],
+      "navaids": [
+        "VOR/DME(MKG)：115.20 MHZ(CH99X) 233543.6N 1193814.2E 高度77FT",
+        "VOR/DME(TNN)：113.30 MHZ(CH80X) 230807.1N 1201222.3E 高度46FT"
+      ],
+      "departure_minima": [],
+      "arp_coordinates": [
+        119.4175,
+        23.213056
+      ]
+    },
+    {
+      "id": "RCDC",
+      "name_zh": "屏東南",
+      "name_en": "PINGTUNG SOUTH",
+      "arp_dms": "224020N 1202740E",
+      "arp_note": "屏東市區西面1公里",
+      "elevation_ft": 81,
+      "ref_temp_c": 33,
+      "runways": [
+        "09：跑道頭標高 76 FT",
+        "27：跑道頭標高 78 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於屏東 Class D 空域",
+      "remarks": [
+        "高雄近場管制負責此空域內所有儀器飛航航空器",
+        "屏東南塔臺於目視天氣情況時負責機場航線上航空器管制",
+        "跑道09供降落；跑道27供起飛",
+        "禁止繞場進場"
+      ],
+      "communications": [
+        "TWR：PINGTUNG SOUTH TOWER 126.18 MHZ（備用 236.60 / 275.80 MHZ）",
+        "地面管制：315.40 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY09：LOC 108.95 MHZ(IPIT) 224023.3N 1202837.3E；GP 329.15 MHZ 滑降角3° RDH50FT；DME(CH26Y) 天線標高150FT",
+        "NDB(DC)：215.00 KHZ，224017.0N 1202538.1E"
+      ],
+      "departure_minima": [],
+      "arp_coordinates": [
+        120.461111,
+        22.672222
+      ]
+    },
+    {
+      "id": "RCFG",
+      "name_zh": "馬祖南竿",
+      "name_en": "MATSU-NANGAN",
+      "arp_dms": "260935N 1195730E",
+      "arp_note": "跑道03/21中心點",
+      "elevation_ft": 232,
+      "ref_temp_c": 31,
+      "runways": [
+        "03：跑道頭標高 221 FT",
+        "21：跑道頭標高 218 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於馬祖 Class D 空域",
+      "remarks": [
+        "臺北近場管制塔臺負責此空域內所有儀器飛航之管制",
+        "於目視天氣情況時，南竿塔臺負責機場航線上航空器活動",
+        "南竿機場使用東航線",
+        "固定翼航空器不得實施特種目視飛航"
+      ],
+      "communications": [
+        "ATIS：NANGAN AIRPORT 127.95 MHZ",
+        "TWR：NANGAN TOWER 118.55 / 121.50 / 236.60 / 243.00 MHZ"
+      ],
+      "navaids": [
+        "LDA 03(INKS)：110.50 MHZ 260917.7N 1195717.3E",
+        "DME 03(INKS/CH42X)：260918.5N 1195717.3E 高度242FT",
+        "NDB(NK)：315.00 KHZ 260919.3N 1195718.7E",
+        "DME(NKN/CH38X)：260934.3N 1195726.0E 高度375FT"
+      ],
+      "departure_minima": [],
+      "arp_coordinates": [
+        119.958333,
+        26.159722
+      ]
+    },
+    {
+      "id": "RCFN",
+      "name_zh": "臺東豐年",
+      "name_en": "TAITUNG-FONGNIAN",
+      "arp_dms": "224519N 1210601E",
+      "arp_note": "自04跑道頭方位032度、距離1164公尺",
+      "elevation_ft": 143,
+      "ref_temp_c": 33,
+      "runways": [
+        "04：跑道頭標高 143 FT，著陸區最高點標高 143 FT",
+        "22：跑道頭標高 130 FT，著陸區最高點標高 130 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於臺東 Class D 空域",
+      "remarks": [
+        "高雄近場管制塔臺負責儀器飛航管制",
+        "豐年塔臺負責目視飛航管制",
+        "西航線供小型機及D228使用，東航線經協調後可使用",
+        "臺東志航機場使用東航線"
+      ],
+      "communications": [
+        "APP：KAOHSIUNG APPROACH 119.40 / 123.10 / 228.20 / 235.10 MHZ",
+        "飛行追蹤：KAOHSIUNG FLIGHT FOLLOW 119.50 / 329.50 MHZ",
+        "ATIS：FONGNIAN AIRPORT 127.00 MHZ",
+        "GND：FONGNIAN GROUND 121.90 MHZ",
+        "TWR：FONGNIAN TOWER 118.10 / 236.60 / 274.00 MHZ"
+      ],
+      "navaids": [
+        "LDA 04(IFNN)：110.90 MHZ 224450.7N 1210527.3E 前航道角6°偏架15°",
+        "DME 04(IFNN/CH46X)：224450.9N 1210528.9E 標高171FT",
+        "NDB(GI)：300.00 KHZ 224033.8N 1212858.9E",
+        "VOR/DME(GID)：116.90 MHZ(CH116X) 224020.5N 1212909.5E 標高572FT",
+        "L(JB)：325.00 KHZ 224232.7N 1210539.9E",
+        "DME(JBT/CH19X)：224232.8N 1210539.5E 標高47FT",
+        "L(ZN)：430.00 KHZ 224535.7N 1210932.9E"
+      ],
+      "departure_minima": [
+        "1具引擎：目視距離 1600M",
+        "2-4具引擎：能見度/RVR 800M"
+      ],
+      "arp_coordinates": [
+        121.100278,
+        22.755278
+      ]
+    },
+    {
+      "id": "RCGI",
+      "name_zh": "綠島",
+      "name_en": "LUDAO",
+      "arp_dms": "224024N 1212758E",
+      "arp_note": "跑道17/35中心點",
+      "elevation_ft": 28,
+      "ref_temp_c": 32,
+      "runways": [
+        "17：跑道頭標高 28 FT",
+        "35：跑道頭標高 27 FT"
+      ],
+      "airspace_vertical_limits": "2000FT MSL",
+      "airspace_classification": "機場航線空域，位於綠島 Class E 地面空域",
+      "remarks": [
+        "跑道地帶寬度不符 Annex 14 之規定（17/35皆同）",
+        "APAPI不具備光強度控制裝置，不符ANNEX14之規定",
+        "定翼機於跑道起降時段，直昇機不得於本起降場作業或停放"
+      ],
+      "communications": [
+        "TWR：LUDAO TOWER 118.80 MHZ；121.50 MHZ(緊急)"
+      ],
+      "navaids": [],
+      "departure_minima": [],
+      "arp_coordinates": [
+        121.466111,
+        22.673333
+      ]
+    },
+    {
+      "id": "RCKH",
+      "name_zh": "高雄國際",
+      "name_en": "KAOHSIUNG INTL",
+      "arp_dms": "223437N 1202101E",
+      "arp_note": "跑道09/27中心點",
+      "elevation_ft": 32,
+      "ref_temp_c": 32,
+      "runways": [
+        "09：跑道頭標高 21 FT，著陸區最高點標高 25 FT",
+        "27：跑道頭標高 31 FT，著陸區最高點標高 31 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於高雄 Class D 空域",
+      "remarks": [
+        "高雄近場管制負責此空域內所有航空器管制",
+        "高雄塔臺於目視天氣情況時負責機場航線上航空器活動",
+        "高雄機場使用南航線",
+        "跑道地帶寬度不符 Annex 14 之規定（09/27皆同）"
+      ],
+      "communications": [
+        "APP：KAOHSIUNG APPROACH 121.10 / 124.70 / 125.70 / 228.40 / 232.20 / 324.80 / 328.70 MHZ (H24)",
+        "飛行追蹤：KAOHSIUNG FLIGHT FOLLOW 119.50 / 135.80 / 329.50 MHZ (VFR)",
+        "ATIS：KAOHSIUNG INTL AIRPORT 127.80 MHZ (2200-1600 UTC)",
+        "TWR：KAOHSIUNG TOWER 118.70 / 120.70 / 236.60 MHZ (2200-1600 UTC)",
+        "GND：KAOHSIUNG GROUND 121.80 / 121.90 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY09 CAT I：LOC 108.30 MHZ(IKHG) 223435.4N 1202206.2E 前航道區角3.7°；GP 334.10 MHZ 滑降角3° RDH53FT；DME(IKHG/CH20X) 標高33FT",
+        "ILS RWY27 CAT I：LOC 109.70 MHZ(IKAS) 223439.4N 1201957.4E 前航道區角4.17°；GP 333.20 MHZ 滑降角3° RDH57FT；DME(IKAS/CH34X) 標高43FT",
+        "VOR/DME(HCN)：113.70 MHZ(CH84X) 215540.0N 1205036.9E 標高403FT 磁差04°W",
+        "NDB(SK)：330.00 KHZ 223440.1N 1201934.9E"
+      ],
+      "departure_minima": [
+        "1具引擎：能見度/RVR 350M",
+        "2具引擎：能見度/RVR 500M",
+        "3具引擎：能見度/RVR 800M",
+        "4具引擎：NIL（僅日間）"
+      ],
+      "arp_coordinates": [
+        120.350278,
+        22.576944
+      ]
+    },
+    {
+      "id": "RCKU",
+      "name_zh": "嘉義",
+      "name_en": "CHIAYI",
+      "arp_dms": "232716N 1202412E",
+      "arp_note": "嘉義火車站以西5.41公里",
+      "elevation_ft": 85,
+      "ref_temp_c": 34,
+      "runways": [
+        "18：跑道頭標高 75 FT，著陸區最高點標高 76 FT",
+        "36：跑道頭標高 85 FT，著陸區最高點標高 85 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於嘉義 Class D 空域",
+      "remarks": [
+        "高雄近場管制塔臺負責此空域內所有儀器飛航航空器之管制",
+        "於目視天氣情況時，嘉義塔臺負責機場航線上航空器活動之管制"
+      ],
+      "communications": [
+        "TWR：CHIAYI TOWER 118.60 / 121.50 / 122.70 / 126.18 / 236.60 / 243.00 / 265.40 / 275.80 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY18 CAT I：LOC 110.30 MHZ(IKUI) 232648.9N 1202326.7E 前航道區角3.63°；GP 335.00 MHZ 滑降角3° RDH50FT；DME(IKUI/CH40X) 標高89FT",
+        "ILS RWY36 CAT I：LOC 109.90 MHZ(ICHI) 232848.5N 1202325.3E 前航道區角3.65°；GP 333.80 MHZ 滑降角3° RDH56FT；DME(ICHI/CH36X) 標高99FT",
+        "NDB(KU)：525.00 KHZ 233503.1N 1202320.8E",
+        "VOR/DME(TNN)：113.30 MHZ(CH80X) 230807.1N 1201222.3E 標高46FT 磁差04°W"
+      ],
+      "departure_minima": [
+        "1具引擎：能見度/RVR 550M（僅日間，無標線）",
+        "2-4具引擎：能見度/RVR 800M"
+      ],
+      "arp_coordinates": [
+        120.403333,
+        23.454444
+      ]
+    },
+    {
+      "id": "RCKW",
+      "name_zh": "恆春",
+      "name_en": "HENGCHUN",
+      "arp_dms": "220227N 1204349E",
+      "arp_note": "跑道14/32中心點",
+      "elevation_ft": 46,
+      "ref_temp_c": 31,
+      "runways": [
+        "14：跑道頭標高 30 FT",
+        "32：跑道頭標高 46 FT"
+      ],
+      "airspace_vertical_limits": "2000FT MSL",
+      "airspace_classification": "機場航線空域，位於恆春 Class E 地面空域",
+      "remarks": [
+        "恆春管制塔臺負責機場航線上航空器活動之管制",
+        "恆春機場使用西航線",
+        "固定翼航空器不得實施特種目視飛航"
+      ],
+      "communications": [
+        "TWR：HENGCHUN TOWER 118.25 MHZ；121.50 / 236.60 / 243.00 MHZ(應急備用)"
+      ],
+      "navaids": [
+        "VOR/DME(HCN)：113.70 MHZ(CH84X) 215540.0N 1205036.9E 標高403FT",
+        "NDB(KT)：425.00 KHZ 220237.5N 1204350.4E",
+        "DME(KTG)：1161MHZ TX/1098MHZ RX 220237.6N 1204350.1E 標高53FT"
+      ],
+      "departure_minima": [],
+      "arp_coordinates": [
+        120.730278,
+        22.040833
+      ]
+    },
+    {
+      "id": "RCLY",
+      "name_zh": "蘭嶼",
+      "name_en": "LANYU",
+      "arp_dms": "220140N 1213205E",
+      "arp_note": "自31跑道頭方位307度、距離459公尺",
+      "elevation_ft": 44,
+      "ref_temp_c": 31,
+      "runways": [
+        "13：跑道頭標高 42 FT",
+        "31：跑道頭標高 43 FT"
+      ],
+      "airspace_vertical_limits": "2000FT MSL",
+      "airspace_classification": "機場航線空域，位於蘭嶼 Class E 地面空域",
+      "remarks": [
+        "蘭嶼塔臺於目視天氣情況時負責機場航線上航空器活動之管制",
+        "固定翼航空器不得實施特種目視飛航"
+      ],
+      "communications": [
+        "TWR：LANYU TOWER 118.50 MHZ；121.50 MHZ(緊急)"
+      ],
+      "navaids": [
+        "NDB(LY)：350.00 KHZ H24 220436.2N 1213028.6E",
+        "DME(LYU/CH26X)：H24 220436.4N 1213028.6E 天線高598FT"
+      ],
+      "departure_minima": [],
+      "arp_coordinates": [
+        121.534722,
+        22.027778
+      ]
+    },
+    {
+      "id": "RCMQ",
+      "name_zh": "臺中清泉崗",
+      "name_en": "TAICHUNG-CINGCYUANGANG",
+      "arp_dms": "241554N 1203715E",
+      "arp_note": "跑道18/36中心點",
+      "elevation_ft": 665,
+      "ref_temp_c": 33,
+      "runways": [
+        "18：跑道頭標高 653 FT，著陸區最高點標高 657 FT",
+        "36：跑道頭標高 663 FT，著陸區最高點標高 665 FT"
+      ],
+      "airspace_vertical_limits": "3000FT MSL",
+      "airspace_classification": "機場航線空域，位於臺中 Class D 空域",
+      "remarks": [
+        "臺北近場管制塔臺負責此空域內所有儀器飛航航空器之管制",
+        "於目視天氣情況時，清泉崗塔臺負責機場航線上航空器活動",
+        "臺中/清泉崗機場使用西航線"
+      ],
+      "communications": [
+        "APP：TAIPEI APPROACH 121.50 / 129.60 / 130.10 / 257.80 / 301.00 / 301.50 MHZ",
+        "VFR飛行追蹤：TAIPEI FLIGHT FOLLOW 135.80 / 318.20 / 329.50 MHZ",
+        "ATIS：CINGCYUANGANG AIRPORT 127.75 MHZ",
+        "GND/TWR：CCK GROUND 120.25 MHZ / CCK TOWER 118.75 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY18：LOC 111.70 MHZ(ITCG) 前航道區角3.1°；GP 333.50 MHZ 241643.5N 1203708.3E 滑降角3° RDH52.85FT；DME(ITCG/CH54X) 標高728FT",
+        "ILS RWY36：LOC 111.50 MHZ(ICCK) 前航道區角3.08°；GP 332.90 MHZ 241505.4N 1203722.1E 滑降角3° RDH54.13FT；DME(ICCK/CH52X) 標高675FT",
+        "NDB(HL)：362.00 KHZ 243349.0N 1204349.4E",
+        "VOR/DME(HLG)：114.00 MHZ 243335.3N 1204337.8E 標高575FT",
+        "VOR/DME(MKG)：115.20 MHZ 233543.6N 1193814.2E 標高77FT",
+        "L(TC)：210.00 KHZ 241512.8N 1203707.2E",
+        "DME(TCK/CH21X)：241513.0N 1203707.5E 標高679FT"
+      ],
+      "departure_minima": [
+        "1具引擎：能見度/RVR 550M（跑道標線時能見度1600M）",
+        "2-4具引擎：能見度/RVR 800M"
+      ],
+      "arp_coordinates": [
+        120.620833,
+        24.265
+      ]
+    },
+    {
+      "id": "RCMT",
+      "name_zh": "馬祖北竿",
+      "name_en": "MATSU-BEIGAN",
+      "arp_dms": "261327N 1200010E",
+      "arp_note": "跑道03/21中心點",
+      "elevation_ft": 41,
+      "ref_temp_c": 31,
+      "runways": [
+        "03：跑道頭標高 26 FT",
+        "21：跑道頭標高 41 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於馬祖 Class D 空域",
+      "remarks": [
+        "臺北近場管制塔臺負責此空域內所有儀器飛航之管制",
+        "於目視天氣情況時，北竿塔臺負責機場航線上航空器活動之管制",
+        "北竿機場使用東航線",
+        "固定翼航空器不得實施特種目視飛航"
+      ],
+      "communications": [
+        "ATIS：BEIGAN AIRPORT 127.35 MHZ",
+        "TWR：BEIGAN TOWER 118.10 MHZ（備用 118.65 / 121.50 / 236.60 / 243.00 MHZ）"
+      ],
+      "navaids": [
+        "LDA 03(IBGS)：109.50 MHZ 261329.3N 1200007.2E 偏架2.7°",
+        "LDA 21(IBGN)：109.50 MHZ 261329.8N 1200007.5E 偏架2.75°",
+        "DME(IBGS/CH32X)：261329.5N 1200007.6E 標高42FT",
+        "NDB(NK)：315.00 KHZ 260919.3N 1195718.7E",
+        "DME(NKN/CH38X)：260934.3N 1195726.0E 標高375FT",
+        "L(PK)：275.00 KHZ 261327.2N 1195959.5E",
+        "DME(PKN/CH34X)：261327.4N 1195959.6E 標高82FT"
+      ],
+      "departure_minima": [
+        "1具引擎：RWY03 能見度1600M/雲幕500FT；RWY21 能見度1600M",
+        "2-3具引擎：能見度/RVR 800M（RWY03雲幕500FT）"
+      ],
+      "arp_coordinates": [
+        120.002778,
+        26.224167
+      ]
+    },
+    {
+      "id": "RCNN",
+      "name_zh": "臺南",
+      "name_en": "TAINAN",
+      "arp_dms": "225657N 1201240E",
+      "arp_note": "臺南市區以南6公里",
+      "elevation_ft": 64,
+      "ref_temp_c": 33,
+      "runways": [
+        "18L：跑道頭標高 63 FT，著陸區最高點標高 63 FT",
+        "36R：跑道頭標高 32 FT，著陸區最高點標高 44 FT",
+        "18R：跑道頭標高 56 FT",
+        "36L：跑道頭標高 25 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於臺南 Class D 空域",
+      "remarks": [
+        "高雄近場管制負責此空域內所有儀器飛航航空器之管制",
+        "臺南塔臺於目視天氣情況時負責機場航線上航空器活動之管制",
+        "臺南機場使用西航線"
+      ],
+      "communications": [
+        "TWR：TAINAN TOWER 118.40 MHZ (2300-1400 UTC)",
+        "民用航空器主波道：121.50 MHZ",
+        "滑行/起飛前許可/車輛管制：121.60 MHZ",
+        "備用：126.18 / 236.60 / 243.00 / 275.80 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY18L CAT I：LOC 111.10 MHZ(ITNA) 225603.7N 1201228.6E 前航道區角3.7°(地形因素低於1.69°不可用)；GP 331.70 MHZ 滑降角3° RDH50FT；DME(ITNA/CH48X) 標高75FT",
+        "ILS RWY36R CAT I：LOC 110.10 MHZ(ITNN) 225800.7N 1201225.8E 前航道區角3.66°；GP 334.40 MHZ 滑降角3° RDH54FT；DME(ITNN/CH38X) 標高44FT",
+        "VOR/DME(TNN)：113.30 MHZ(CH80X) 230807.1N 1201222.3E 標高46FT 磁差04°W"
+      ],
+      "departure_minima": [
+        "1具引擎：能見度/RVR 550M；無標線時能見度1600M",
+        "2-4具引擎：能見度/RVR 800M（僅日間）"
+      ],
+      "arp_coordinates": [
+        120.211111,
+        22.949167
+      ]
+    },
+    {
+      "id": "RCQC",
+      "name_zh": "澎湖",
+      "name_en": "PENGHU",
+      "arp_dms": "233407N 1193742E",
+      "arp_note": "跑道02/20中心點",
+      "elevation_ft": 103,
+      "ref_temp_c": 33,
+      "runways": [
+        "02：跑道頭標高 103 FT，著陸區最高點標高 103 FT",
+        "20：跑道頭標高 46 FT，著陸區最高點標高 70 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於馬公 Class D 空域",
+      "remarks": [
+        "高雄近場管制塔臺負責此空域內所有儀器飛航航空器之管制",
+        "於目視天氣情況時，馬公塔臺負責機場航線上航空器活動之管制",
+        "民航機使用東航線"
+      ],
+      "communications": [
+        "APP：KAOHSIUNG APPROACH 128.10 MHZ（備用129.90 MHZ）",
+        "ATIS：PENGHU AIRPORT 127.05 MHZ",
+        "GND：MAGONG GROUND 121.90 MHZ",
+        "TWR：MAGONG TOWER 118.30 MHZ（備用 126.18 / 236.60 / 275.80 MHZ）"
+      ],
+      "navaids": [
+        "ILS RWY02 CAT I：LOC 109.10 MHZ(IMKG) 前航道區角3.62°；GP 331.40 MHZ 滑降角3° RDH56FT；DME(IMKG/CH28X)",
+        "ILS RWY20 CAT I：LOC 108.10 MHZ(IMZG) 前航道區角3.76°；GP 334.70 MHZ 滑降角3° RDH50FT；DME(IMZG/CH18X)",
+        "VOR/DME(MKG)：115.20 MHZ(CH99X) 233543.6N 1193814.2E"
+      ],
+      "departure_minima": [
+        "1具引擎：能見度/RVR 550M",
+        "2具引擎：能見度1600M",
+        "3-4具引擎：能見度/RVR 800M"
+      ],
+      "arp_coordinates": [
+        119.628333,
+        23.568611
+      ]
+    },
+    {
+      "id": "RCSP",
+      "name_zh": "太平",
+      "name_en": "TAIPING",
+      "arp_dms": "102240N 1142159E",
+      "arp_note": null,
+      "elevation_ft": 9,
+      "ref_temp_c": null,
+      "runways": [
+        "07：跑道頭標高 9 FT",
+        "25：跑道頭標高 9 FT"
+      ],
+      "airspace_vertical_limits": null,
+      "airspace_classification": null,
+      "remarks": [
+        "本機場設置機動塔康(TACAN)，發射天線位置為 102231N 1142142E"
+      ],
+      "communications": [
+        "TWR：TAIPING TOWER 275.80 MHZ"
+      ],
+      "navaids": [],
+      "departure_minima": [],
+      "arp_coordinates": [
+        114.366389,
+        10.377778
+      ]
+    },
+    {
+      "id": "RCSS",
+      "name_zh": "臺北松山",
+      "name_en": "TAIPEI-SONGSHAN",
+      "arp_dms": "250411N 1213309E",
+      "arp_note": "跑道10/28中心點",
+      "elevation_ft": 18,
+      "ref_temp_c": 35,
+      "runways": [
+        "10：跑道頭標高 13 FT，著陸區最高點標高 13 FT",
+        "28：跑道頭標高 14 FT，著陸區最高點標高 17 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於松山 Class C 空域",
+      "remarks": [
+        "臺北近場管制塔臺負責此空域內所有航空器之管制",
+        "松山塔臺於目視天氣情況時負責機場航線上航空器活動之管制",
+        "固定翼航空器禁止實施目視進場、特種目視飛航及機場航線",
+        "松山機場使用南航線"
+      ],
+      "communications": [
+        "ATIS：SONGSHAN AIRPORT 127.40 / 341.00 MHZ (2100-1600 UTC)",
+        "GND：SONGSHAN GROUND 121.20 MHZ(許可)／121.90 MHZ(地面)",
+        "TWR：SONGSHAN TOWER 118.10 / 126.30 / 236.60 / 275.80 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY10 CAT I：LOC 108.90 MHZ(ITSG) 250408.6N 1213404.2E 前航道區角4.2°；GP 329.30 MHZ 滑降角3° RDH55FT；DME(ITSG/CH26X) 標高25FT",
+        "LDA RWY28(ITLU)：108.10 MHZ 偏架7°；DME(ITLU/CH18X) 標高45FT",
+        "NDB(AP)：250.00 KHZ 251032.5N 1213120.5E",
+        "VOR/DME(APU)：112.50 MHZ(CH72X) 251036.7N 1213120.1E 標高3594FT",
+        "NDB(HL)：362.00 KHZ 243349.0N 1204349.4E",
+        "VOR/DME(HLG)：114.00 MHZ(CH87X) 243335.3N 1204337.8E 標高575FT",
+        "L(LU)：357.00 KHZ 250822.1N 1214803.3E",
+        "VOR/DME(MKG)：115.20 MHZ(CH99X) 233543.6N 1193814.2E 標高77FT",
+        "VOR/DME(TSI)：113.50 MHZ(CH82X) 250403.0N 1213354.7E 標高54FT"
+      ],
+      "departure_minima": [
+        "1具引擎(有標線)：能見度/RVR 500M；(無標線)：能見度1600M",
+        "2-4具引擎：能見度/RVR 800M"
+      ],
+      "arp_coordinates": [
+        121.5525,
+        25.069722
+      ]
+    },
+    {
+      "id": "RCTP",
+      "name_zh": "臺灣桃園國際",
+      "name_en": "TAIPEI-TAIWAN TAOYUAN INTL",
+      "arp_dms": "250449N 1211356E",
+      "arp_note": "自05L跑道頭方位063度、距離1800公尺",
+      "elevation_ft": 108,
+      "ref_temp_c": 34,
+      "runways": [
+        "05L：跑道頭標高 74 FT，著陸區最高點標高 74 FT",
+        "23R：跑道頭標高 63 FT，著陸區最高點標高 63 FT",
+        "05R：跑道頭標高 107 FT，著陸區最高點標高 107 FT",
+        "23L：跑道頭標高 96 FT，著陸區最高點標高 97 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於臺北 Class C 空域",
+      "remarks": [
+        "臺北近場/塔臺提供管制服務",
+        "桃園機場使用西航線"
+      ],
+      "communications": [
+        "APP：TAIPEI APPROACH 119.60 / 119.70 / 121.00 / 122.30 / 123.50 / 124.20 / 125.10 / 125.60 / 128.50 / 228.00 / 251.30 / 306.60 / 330.90 MHZ",
+        "TWR：TAIPEI TOWER 118.70 / 129.30 MHZ",
+        "GND：TAIPEI GROUND 121.60 / 121.70 MHZ",
+        "ATIS：TAIWAN TAOYUAN INTL AIRPORT 127.60 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY05L：LOC 111.10 MHZ(ITIA) 250546.5N 1211444.4E 前航道區角3.08°；GP 331.70 MHZ 滑降角3° RDH50FT；DME(ITIA/CH48X) 標高89FT",
+        "ILS RWY23R：LOC 109.30 MHZ(ITYA) 250416.1N 1211249.5E 前航道區角3.08°；GP 332.00 MHZ 滑降角3° RDH50FT；DME(ITYA/CH30X) 標高78FT",
+        "ILS RWY05R：LOC 110.70 MHZ(ICKS) 250506.3N 1211515.5E 前航道區角3.07°；GP 330.20 MHZ 滑降角3° RDH53FT；DME(ICKS/CH44X) 標高119FT",
+        "ILS RWY23L：LOC 111.90 MHZ(ICJN) 250332.7N 1211316.6E 前航道區角3.28°；GP 331.10 MHZ 滑降角3° RDH55FT；DME(ICJN/CH56X) 標高108FT",
+        "VOR/DME(APU)：112.50 MHZ(CH72X) 251036.7N 1213120.1E 標高3594FT",
+        "NDB(AP)：250.00 KHZ 251032.5N 1213120.5E"
+      ],
+      "departure_minima": [
+        "1具引擎：RVR 175M(REDL,RCLL&3RVR)／RVR 350M／RVR 500M／能見度1600M（依設施等級遞增）",
+        "2-4具引擎：能見度/RVR 800M"
+      ],
+      "arp_coordinates": [
+        121.232222,
+        25.080278
+      ]
+    },
+    {
+      "id": "RCWA",
+      "name_zh": "望安",
+      "name_en": "WANG-AN",
+      "arp_dms": "232209N 1193013E",
+      "arp_note": "跑道02/20中心點",
+      "elevation_ft": 114,
+      "ref_temp_c": 33,
+      "runways": [
+        "02：跑道頭標高 101 FT",
+        "20：跑道頭標高 100 FT"
+      ],
+      "airspace_vertical_limits": null,
+      "airspace_classification": null,
+      "remarks": [
+        "APAPI不具備光強度控制裝置，不符ANNEX14之規定（02/20皆同）",
+        "參考溫度使用澎湖機場資料"
+      ],
+      "communications": [
+        "TWR：WANG-AN TWR 118.90 MHZ；121.50 MHZ(緊急)，作業時間 2300-1000 UTC"
+      ],
+      "navaids": [
+        "VOR/DME(MKG)：115.20 MHZ(CH99X) 233543.6N 1193814.2E 標高77FT",
+        "VOR/DME(TNN)：113.30 MHZ(CH80X) 230807.1N 1201222.3E 標高46FT"
+      ],
+      "departure_minima": [],
+      "arp_coordinates": [
+        119.503611,
+        23.369167
+      ]
+    },
+    {
+      "id": "RCYU",
+      "name_zh": "花蓮",
+      "name_en": "HUALIEN",
+      "arp_dms": "240124N 1213636E",
+      "arp_note": "自03跑道頭方位357度、距離1195公尺",
+      "elevation_ft": 51,
+      "ref_temp_c": 34,
+      "runways": [
+        "03：跑道頭標高 44 FT，著陸區最高點標高 44 FT",
+        "21：跑道頭標高 51 FT"
+      ],
+      "airspace_vertical_limits": "2500FT MSL",
+      "airspace_classification": "機場航線空域，位於花蓮 Class D 空域",
+      "remarks": [
+        "臺北近場管制塔臺負責此空域內所有儀器飛航之管制",
+        "於目視天氣情況時，花蓮塔臺負責機場航線上航空器活動之管制",
+        "花蓮機場使用東航線",
+        "轉換飛行高度：11000FT"
+      ],
+      "communications": [
+        "APP：TAIPEI APPROACH 119.10 MHZ（備用124.00 MHZ）",
+        "飛航追蹤：TAIPEI FLIGHT FOLLOW 135.80 MHZ",
+        "TWR：HUALIEN TOWER 118.10 MHZ",
+        "許可/地面：121.90 MHZ"
+      ],
+      "navaids": [
+        "ILS RWY03 CAT I：LOC 109.90 MHZ(IHUA) 240214.0N 1213727.2E 前航道區角4.2°；GP 333.80 MHZ 滑降角3° RDH55FT；DME(IHUA/CH36X) 標高50FT",
+        "LDA RWY21(IHLN)：110.30 MHZ 240222.4N 1213719.6E 偏架15° 前航道區角6°；DME(IHLN/CH40X) 標高65FT",
+        "VOR/DME(APU)：112.50 MHZ",
+        "VOR/DME(GID)：116.90 MHZ",
+        "VOR/DME(HLN)：114.10 MHZ",
+        "NDB(AP)：250.00 KHZ",
+        "NDB(YU)：380.00 KHZ"
+      ],
+      "departure_minima": [
+        "1具引擎：能見度/RVR 550M（無標線僅日間）",
+        "2具引擎：能見度/RVR 800M"
+      ],
+      "arp_coordinates": [
+        121.61,
+        24.023333
+      ]
+    }
+  ]
+}
+;
+
