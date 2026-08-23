@@ -1831,10 +1831,17 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     rangeNm: rangeEl ? (parseFloat(rangeEl.value) || 0) : 0
                 };
             }
+            // 威脅範圍的紅色遮罩圖(跟地圖上顯示的是同一份計算結果)，一併帶到 3D PVW，
+            // 這樣 3D 畫面呈現的可偵測範圍會跟 2D 地圖上看到的完全一致，不用在 3D 端另外簡化重算
+            const viewshedImageForExport = (threatData && window.lastViewshedResult) ? window.lastViewshedResult : null;
+
             if (threatData) {
                 sessionStorage.setItem('mission_threat', JSON.stringify(threatData));
+                if (viewshedImageForExport) sessionStorage.setItem('mission_viewshed_image', JSON.stringify(viewshedImageForExport));
+                else sessionStorage.removeItem('mission_viewshed_image');
             } else {
                 sessionStorage.removeItem('mission_threat'); // clear if none
+                sessionStorage.removeItem('mission_viewshed_image');
             }
 
             // 目前地圖上有勾選顯示的限制空域/UAS訓練空域，一併帶到 3D PVW
@@ -1850,6 +1857,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             // Store in global window object for cross-tab postMessage bridge (file:// fallback)
             window.latestGpxString = gpx;
             window.latestThreatData = threatData;
+            window.latestViewshedImage = viewshedImageForExport;
             window.latestRestrictedAreas = restrictedAreasForExport;
             window.latestUasAreas = uasAreasForExport;
             window.latestPowerLines = powerLinesForExport;
@@ -1859,6 +1867,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             const missionPayload = encodeURIComponent(JSON.stringify({
                 gpx,
                 threat: threatData,
+                viewshedImage: viewshedImageForExport,
                 restrictedAreas: restrictedAreasForExport,
                 uasAreas: uasAreasForExport,
                 powerLines: powerLinesForExport
@@ -1876,6 +1885,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                         type: 'DELIVER_MISSION_DATA',
                         gpx: window.latestGpxString,
                         threat: window.latestThreatData,
+                        viewshedImage: window.latestViewshedImage,
                         restrictedAreas: window.latestRestrictedAreas,
                         uasAreas: window.latestUasAreas,
                         powerLines: window.latestPowerLines
@@ -2096,6 +2106,13 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     const bounds = L.latLngBounds(southWest, northEast);
 
                     L.imageOverlay(outputCanvas.toDataURL(), bounds).addTo(missileLayer);
+
+                    // 記錄這次計算結果(紅色遮罩圖+範圍)，供 3D PVW 直接沿用同一份計算結果貼到地球表面，
+                    // 確保 2D/3D 呈現的雷達可偵測範圍完全一致(3D 端不再另外用簡化公式重算一次)
+                    window.lastViewshedResult = {
+                        dataUrl: outputCanvas.toDataURL(),
+                        bounds: { south: southWest.lat, west: southWest.lng, north: northEast.lat, east: northEast.lng }
+                    };
                     resolve();
                 };
 

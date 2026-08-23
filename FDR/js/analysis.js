@@ -6,6 +6,7 @@ if (typeof APP_CONFIG === 'undefined') {
 }
 
 let activeThreatData = null;
+let activeViewshedImage = null;
 let activeRestrictedAreas = [];
 let activeUasAreas = [];
 let activePowerLines = null;
@@ -145,12 +146,42 @@ function waitForTerrainReady(timeoutMs) {
     });
 }
 
-async function drawThreatDome(threatData) {
-    if (!viewer || !threatData) return;
+let threatViewshedLayer = null;
 
+function removeThreatDomeVisuals() {
     threatDomeEntities.forEach(ent => { try { viewer.entities.remove(ent); } catch (e) { } });
     threatDomeEntities = [];
+    if (threatViewshedLayer) {
+        try { viewer.imageryLayers.remove(threatViewshedLayer); } catch (e) { }
+        threatViewshedLayer = null;
+    }
+}
 
+async function drawThreatDome(threatData, viewshedImage) {
+    if (!viewer || !threatData) return;
+
+    removeThreatDomeVisuals();
+
+    // 優先方案：直接沿用地圖端(main.js 防空隱蔽分析)已經逐點算好的雷達可偵測範圍遮罩圖，
+    // 貼到地球表面上(跟貼衛星圖同一種機制，會自動服貼地形)。這張圖本來就已經考慮了地形遮蔽、
+    // 地球曲率、以及同一方向不同距離的差異，不是只依方位角的簡化估算，
+    // 確保 3D 看到的可偵測範圍跟 2D 地圖上完全一致。
+    if (viewshedImage && viewshedImage.dataUrl && viewshedImage.bounds) {
+        try {
+            const b = viewshedImage.bounds;
+            const rectangle = Cesium.Rectangle.fromDegrees(b.west, b.south, b.east, b.north);
+            const provider = await Cesium.SingleTileImageryProvider.fromUrl(viewshedImage.dataUrl, { rectangle: rectangle });
+            threatViewshedLayer = viewer.imageryLayers.addImageryProvider(provider);
+            threatViewshedLayer.alpha = 0.75;
+            return;
+        } catch (e) {
+            console.error('威脅範圍遮罩圖貼圖失敗，改用簡化的方位角地形水平線估算:', e);
+            showCesiumWarning('威脅範圍遮罩圖貼圖失敗，已改用較粗略的方位角地形遮蔽估算。錯誤原因：' + (e && e.message ? e.message : e));
+        }
+    }
+
+    // 備援方案(沒有遮罩圖，或貼圖失敗時)：退回用方位角地形水平線做簡化估算。
+    // 注意這個方法沒辦法呈現「同一方向、不同距離遮蔽程度不同」的情況，精確度不如遮罩圖。
     const rangeM = threatData.rangeNm * 1852;
     const targetAltM = (threatData.altFt || 500) * 0.3048;
     const ceilingM = Math.max(targetAltM * 2, 6000);
@@ -549,7 +580,7 @@ function updateUI() {
         viewer.entities.removeAll();
         createCesiumMarker();
         if (activeThreatData) {
-            drawThreatDome(activeThreatData);
+            drawThreatDome(activeThreatData, activeViewshedImage);
         }
         if (activeRestrictedAreas && activeRestrictedAreas.length) {
             drawAirspaceVolumes(activeRestrictedAreas, '#0080FF', '🚧 ');
@@ -866,9 +897,10 @@ window.onload = () => {
     if (location.hash && location.hash.indexOf('#data=') === 0) {
         try {
             const payload = JSON.parse(decodeURIComponent(location.hash.slice('#data='.length)));
+            if (payload.viewshedImage) activeViewshedImage = payload.viewshedImage;
             if (payload.threat) {
                 activeThreatData = payload.threat;
-                if (viewer) drawThreatDome(activeThreatData);
+                if (viewer) drawThreatDome(activeThreatData, activeViewshedImage);
             }
             if (payload.restrictedAreas) activeRestrictedAreas = payload.restrictedAreas;
             if (payload.uasAreas) activeUasAreas = payload.uasAreas;
@@ -889,11 +921,18 @@ window.onload = () => {
 
     // 2) 次要：sessionStorage（同來源情境下可用，例如透過本機伺服器開啟）
     if (!gpxLoadedFromStorage) {
+        try {
+            const storedViewshedImage = sessionStorage.getItem('mission_viewshed_image');
+            if (storedViewshedImage) activeViewshedImage = JSON.parse(storedViewshedImage);
+        } catch (e) {
+            console.error(e);
+        }
+
         const storedThreat = sessionStorage.getItem('mission_threat');
         if (storedThreat) {
             try {
                 activeThreatData = JSON.parse(storedThreat);
-                if (viewer) drawThreatDome(activeThreatData);
+                if (viewer) drawThreatDome(activeThreatData, activeViewshedImage);
             } catch (e) {
                 console.error(e);
             }
@@ -936,6 +975,7 @@ window.onload = () => {
 window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'DELIVER_MISSION_DATA') {
         console.log("Successfully received mission data via postMessage bridge!");
+        if (event.data.viewshedImage) activeViewshedImage = event.data.viewshedImage;
         if (event.data.threat) {
             activeThreatData = event.data.threat;
         }
