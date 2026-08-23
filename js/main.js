@@ -2037,9 +2037,10 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             const idx = (Math.floor(cy) * canvas.width + Math.floor(cx)) * 4;
             const missileElev = (data[idx] * 256 + data[idx + 1] + data[idx + 2] / 256) - 32768;
             const targetAltM = targetAltFt * 0.3048; // 換算公尺
+            const rangeM = rangeKm * 1000; // 雷達最大偵測距離(斜距)，換算成公尺
             // 雷達本身的最大偵測距離(斜距)決定了立體範圍能拉多高：正上方最多只能偵測到
             // missileElev + rangeM 的高度，不可能超過雷達的最大射程
-            const ceilingAltM = missileElev + (rangeKm * 1000);
+            const ceilingAltM = missileElev + rangeM;
             const numAltSlices = 10; // 立體圓頂用幾層高度切片堆疊出來，越多越平滑但資料量越大
 
             // --- [精準優化] 計算該緯度下的實際每像素公尺數 (Web Mercator) ---
@@ -2047,12 +2048,12 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             const metersPerPixel = (earthCircumference * Math.cos(latlng.lat * Math.PI / 180)) / Math.pow(2, z + 8);
 
             // 根據精準公尺數，計算涵蓋半徑所需的最大像素數量
-            const maxDistPx = (rangeKm * 1000) / metersPerPixel;
+            const maxDistPx = rangeM / metersPerPixel;
 
             // --- 使用 Web Worker 進行計算以避免凍結主線程 ---
             const workerCode = `
                 self.onmessage = function(e) {
-                    const { buffer, width, height, cx, cy, missileElev, targetAltM, maxDistPx, metersPerPixel, ceilingAltM, numAltSlices } = e.data;
+                    const { buffer, width, height, cx, cy, missileElev, targetAltM, maxDistPx, metersPerPixel, ceilingAltM, numAltSlices, rangeM } = e.data;
                     const data = new Uint8ClampedArray(buffer);
                     const outData = new Uint8ClampedArray(width * height * 4); // 預設全部為透明(0)
 
@@ -2062,13 +2063,28 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     // 這是沿著同一條掃描線順便記錄下來的，不用另外重算，用來畫出平滑邊緣的可偵測範圍多邊形
                     const boundaryR = new Float32Array(angleCount);
 
+                    // 雷達的最大偵測距離(rangeM)是「斜距」，不是單純的水平距離：真正的偵測範圍(排除地形前)
+                    // 是以飛彈為球心、rangeM 為半徑的球體。目標跟飛彈的高度差(dAlt)越大，該高度能達到的
+                    // 水平距離就必須越小(勾股定理: 水平距離 <= sqrt(rangeM^2 - dAlt^2))，離飛彈高度剛好
+                    // rangeM 時，水平距離降到 0。這樣疊出來的立體範圍才會是球狀圓頂，而不是同一個水平半徑
+                    // 從頭到尾往上拉伸的柱狀體。
+                    function maxHorizPxAtAlt(altM) {
+                        const dAlt = altM - missileElev;
+                        const remain = rangeM * rangeM - dAlt * dAlt;
+                        return remain > 0 ? Math.sqrt(remain) / metersPerPixel : 0;
+                    }
+                    const maxHorizPxTarget = maxHorizPxAtAlt(targetAltM);
+
                     // 高度切片：從設定高度到天花板均分成 numAltSlices 層，同一條掃描線一次算出
                     // 每一層的可偵測邊界，飛越高邊界通常越遠(地形遮蔽角固定、飛越高越容易超過)，
-                    // 疊起來就會呈現隨高度展開的立體圓頂；某方向若連天花板都被地形擋住，
+                    // 但同時受限於上面的球面水平距離上限；疊起來就會呈現隨高度展開、越接近天花板越窄的
+                    // 球狀立體圓頂；某方向若連天花板都被地形擋住(或超出球面水平距離上限)，
                     // 該方向每一層的邊界會趨近 0，堆疊起來就是自然內凹的缺口
                     const sliceAltM = new Float32Array(numAltSlices);
+                    const sliceMaxHorizPx = new Float32Array(numAltSlices);
                     for (let k = 0; k < numAltSlices; k++) {
                         sliceAltM[k] = targetAltM + (ceilingAltM - targetAltM) * (k / (numAltSlices - 1));
+                        sliceMaxHorizPx[k] = maxHorizPxAtAlt(sliceAltM[k]);
                     }
                     const sliceBoundaryR = new Float32Array(angleCount * numAltSlices);
                     const sliceFarthest = new Float32Array(numAltSlices);
@@ -2099,7 +2115,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
 
                             const targetSlope = (targetAltM - curvatureDrop - missileElev) / r;
 
-                            if (targetSlope > maxSlope && targetAltM > terrainElev) {
+                            if (targetSlope > maxSlope && targetAltM > terrainElev && r <= maxHorizPxTarget) {
                                 outData[i] = 255;   // R
                                 outData[i+1] = 0;   // G
                                 outData[i+2] = 0;   // B
@@ -2110,7 +2126,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                             for (let k = 0; k < numAltSlices; k++) {
                                 const sAlt = sliceAltM[k];
                                 const sSlope = (sAlt - curvatureDrop - missileElev) / r;
-                                if (sSlope > maxSlope && sAlt > terrainElev) {
+                                if (sSlope > maxSlope && sAlt > terrainElev && r <= sliceMaxHorizPx[k]) {
                                     sliceFarthest[k] = r;
                                 }
                             }
@@ -2219,7 +2235,8 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     maxDistPx: maxDistPx,
                     metersPerPixel: metersPerPixel,
                     ceilingAltM: ceilingAltM,
-                    numAltSlices: numAltSlices
+                    numAltSlices: numAltSlices,
+                    rangeM: rangeM
                 }, [imgData.data.buffer]);
             });
 
