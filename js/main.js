@@ -902,13 +902,16 @@
 
                 marker.bindTooltip(`${a.id} ${a.name_zh}`, { permanent: true, direction: 'top', offset: [0, -10], className: 'navaid-label', interactive: true });
 
-                const clickHandler = (e) => {
+                // 標記本身不用手動綁 click：bindPopup() 已經會自動幫它加上點擊切換開關的預設行為，
+                // 自己再手動呼叫一次 openPopup() 反而會跟 Leaflet 內建邏輯打架，導致彈窗開啟後
+                // 立刻被判定成「再點一次要關閉」而自動關掉(機場天氣圖層先前就是這個問題)。
+                // 但「永久顯示的標籤(tooltip)」是另一個獨立的 Leaflet 圖層物件，點擊它不會觸發
+                // marker 自己的開關邏輯，所以這裡還是需要手動處理。
+                marker.bindPopup(buildAirportPopup(a), { maxHeight: 380, maxWidth: 300 });
+                marker.getTooltip().on('click', (e) => {
                     if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
                     marker.openPopup();
-                };
-                marker.on('click', clickHandler);
-                marker.bindPopup(buildAirportPopup(a), { maxHeight: 380, maxWidth: 300 });
-                marker.getTooltip().on('click', clickHandler);
+                });
 
                 navaidLayer.addLayer(marker); // 跟助導航設施共用同一個「機場與助導航」圖層
             });
@@ -929,6 +932,17 @@
         const weatherLayer = L.layerGroup();
         const weatherMarkers = {}; // icao -> L.Marker
         let weatherRefreshTimer = null;
+
+        // 機場座標備援：METAR 資料裡沒有回報的機場，改用機場資料庫(AD2_AIRPORTS_DATA)裡的
+        // 基準點座標，這樣沒有天氣資料的機場也能畫出灰色標籤，而不是整個消失不顯示
+        const AD2_AIRPORT_COORD_LOOKUP = {};
+        if (typeof AD2_AIRPORTS_DATA !== 'undefined' && AD2_AIRPORTS_DATA.airports) {
+            AD2_AIRPORTS_DATA.airports.forEach(a => {
+                if (a.arp_coordinates) {
+                    AD2_AIRPORT_COORD_LOOKUP[a.id] = { lat: a.arp_coordinates[1], lon: a.arp_coordinates[0], name: a.name_zh };
+                }
+            });
+        }
 
         function flightCategoryColor(cat) {
             switch (cat) {
@@ -976,6 +990,30 @@
             return html;
         }
 
+        function buildNoDataWeatherPopup(icao, nameZh) {
+            return `<div style="color:#333; line-height:1.6; min-width:180px;">
+                <div style="font-weight:bold; font-size:1.05em; color:#666;">🌤️ ${icao}${nameZh ? ' - ' + nameZh : ''}</div>
+                <hr style="margin:5px 0; border:0; border-top:1px solid #ccc;">
+                <div style="color:#888;">目前無可用的天氣觀測資料</div>
+            </div>`;
+        }
+
+        // 新增/更新一個機場天氣標籤。不額外手動綁 click 事件：bindPopup() 本身就會自動幫 marker
+        // 加上「點擊切換開關」的預設行為，額外自己再呼叫一次 openPopup() 反而會跟 Leaflet 內建的
+        // 開關邏輯打架——我們先把它打開，Leaflet 緊接著發現「已經是開啟狀態」就當成再點一次要
+        // 關閉，導致彈窗跳出來不到一秒就自動關掉。
+        function upsertWeatherMarker(icao, latlng, color, popupHtml) {
+            let marker = weatherMarkers[icao];
+            if (!marker) {
+                marker = L.marker(latlng, { icon: buildWeatherIcon(icao, color) });
+                marker.addTo(weatherLayer);
+                weatherMarkers[icao] = marker;
+            } else {
+                marker.setIcon(buildWeatherIcon(icao, color));
+            }
+            marker.bindPopup(popupHtml);
+        }
+
         async function loadAirportWeather() {
             // aviationweather.gov 沒有開放瀏覽器跨網域請求(無 CORS 標頭)，改打自架的 metar-proxy
             // (見專案根目錄 metar-proxy/ 資料夾)，由伺服器端代為轉發並附上 CORS 標頭
@@ -983,31 +1021,33 @@
                 console.warn('未設定 APP_CONFIG.METAR_PROXY_URL，機場天氣圖層無法載入資料。請部署 metar-proxy/ 並在 config.js 填入網址。');
                 return;
             }
+
+            let data = [];
             try {
                 const res = await fetch(`${APP_CONFIG.METAR_PROXY_URL}?ids=${WEATHER_ICAO_CODES.join(',')}`);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                data.forEach(m => {
-                    if (!m.icaoId || m.lat == null || m.lon == null) return;
-                    const color = flightCategoryColor(m.fltCat);
-
-                    let marker = weatherMarkers[m.icaoId];
-                    if (!marker) {
-                        // 不額外手動綁 click 事件：bindPopup() 本身就會自動幫 marker 加上「點擊切換開關」
-                        // 的預設行為，額外自己再呼叫一次 openPopup() 反而會跟 Leaflet 內建的開關邏輯打架
-                        // ——我們先把它打開，Leaflet 緊接著發現「已經是開啟狀態」就當成再點一次要關閉，
-                        // 導致彈窗跳出來不到一秒就自動關掉。
-                        marker = L.marker([m.lat, m.lon], { icon: buildWeatherIcon(m.icaoId, color) });
-                        marker.addTo(weatherLayer);
-                        weatherMarkers[m.icaoId] = marker;
-                    } else {
-                        marker.setIcon(buildWeatherIcon(m.icaoId, color));
-                    }
-                    marker.bindPopup(buildWeatherPopup(m));
-                });
+                data = await res.json();
             } catch (e) {
-                console.error('載入機場天氣(METAR)失敗:', e);
+                console.error('載入機場天氣(METAR)失敗，改用機場資料庫座標畫出無資料標籤:', e);
             }
+
+            const metarByIcao = {};
+            data.forEach(m => { if (m.icaoId) metarByIcao[m.icaoId] = m; });
+
+            // 依「設定要顯示的機場清單」逐一畫標籤，而不是只依「METAR 有回報的機場」，
+            // 這樣即使某個機場當下沒有天氣觀測資料，也會用機場資料庫的座標畫出灰色標籤，
+            // 而不是整個消失不顯示
+            WEATHER_ICAO_CODES.forEach(icao => {
+                const m = metarByIcao[icao];
+                if (m && m.lat != null && m.lon != null) {
+                    upsertWeatherMarker(icao, [m.lat, m.lon], flightCategoryColor(m.fltCat), buildWeatherPopup(m));
+                    return;
+                }
+
+                const fallback = AD2_AIRPORT_COORD_LOOKUP[icao];
+                if (!fallback) return; // 連機場座標都查不到，真的沒辦法畫
+                upsertWeatherMarker(icao, [fallback.lat, fallback.lon], flightCategoryColor(null), buildNoDataWeatherPopup(icao, fallback.name));
+            });
         }
 
         const layerControl = L.control.layers({
