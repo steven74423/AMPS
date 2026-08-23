@@ -125,7 +125,7 @@ async function computeTerrainHorizon(centerLat, centerLng, rangeNm, bearingsCoun
     return { missileElev, maxSlopePerBearing };
 }
 
-let threatDomeEntity = null;
+let threatDomeEntities = [];
 
 // Cesium.Terrain.fromWorldTerrain() 是非同步載入的：viewer 建立當下 viewer.terrainProvider
 // 通常還是預設的平面橢球體地形(沒有 .availability)，這時呼叫 sampleTerrainMostDetailed 會直接丟例外。
@@ -148,10 +148,8 @@ function waitForTerrainReady(timeoutMs) {
 async function drawThreatDome(threatData) {
     if (!viewer || !threatData) return;
 
-    if (threatDomeEntity) {
-        try { viewer.entities.remove(threatDomeEntity); } catch (e) { }
-        threatDomeEntity = null;
-    }
+    threatDomeEntities.forEach(ent => { try { viewer.entities.remove(ent); } catch (e) { } });
+    threatDomeEntities = [];
 
     const rangeM = threatData.rangeNm * 1852;
     const targetAltM = (threatData.altFt || 500) * 0.3048;
@@ -162,42 +160,54 @@ async function drawThreatDome(threatData) {
         await waitForTerrainReady(8000);
         const { missileElev, maxSlopePerBearing } = await computeTerrainHorizon(threatData.lat, threatData.lng, threatData.rangeNm, bearingsCount, 12);
 
-        const wallDegreesPositions = [];
-        const minHeights = [];
-        const maxHeights = [];
         const curvatureDropAtRange = (rangeM * rangeM) / 12742000;
-
-        for (let b = 0; b <= bearingsCount; b++) { // <= 多算一圈把首尾接起來
-            const bi = b % bearingsCount;
-            const bearingRad = (bi / bearingsCount) * 2 * Math.PI;
-            const dest = destinationPoint(threatData.lat, threatData.lng, bearingRad, rangeM);
-
+        const floors = [];
+        for (let bi = 0; bi < bearingsCount; bi++) {
             let floor = missileElev + maxSlopePerBearing[bi] * rangeM + curvatureDropAtRange;
             floor = Math.max(floor, missileElev); // 不低於地面
             floor = Math.min(floor, ceilingM - 10); // 不高於天花板
-
-            wallDegreesPositions.push(dest.lng, dest.lat);
-            minHeights.push(floor);
-            maxHeights.push(ceilingM);
+            floors.push(floor);
         }
 
-        threatDomeEntity = viewer.entities.add({
-            name: 'Missile Threat Coverage (Terrain-Masked)',
-            wall: {
-                positions: Cesium.Cartesian3.fromDegreesArray(wallDegreesPositions),
-                minimumHeights: minHeights,
-                maximumHeights: maxHeights,
-                material: Cesium.Color.RED.withAlpha(0.35),
-                outline: true,
-                outlineColor: Cesium.Color.RED.withAlpha(0.8)
-            }
-        });
+        // 除錯用：把每個方位角被地形墊高多少(公尺)記到 console，方便確認地形遮蔽計算是否真的有算出差異
+        const aboveGround = floors.map(f => f - missileElev);
+        console.log('威脅圓頂地形遮蔽統計(公尺，高於飛彈自身地面高度)：最小', Math.min(...aboveGround).toFixed(0),
+            '最大', Math.max(...aboveGround).toFixed(0), '平均', (aboveGround.reduce((a, b) => a + b, 0) / aboveGround.length).toFixed(0));
+
+        // 每個方位角區間各畫一段獨立的牆，並依「被地形遮蔽的程度」上色：
+        // 貼近地面(幾乎沒被遮蔽) = 鮮紅色，遮蔽越多(牆底墊得越高) = 越偏暗灰色，
+        // 這樣不管高度差在畫面上明不明顯，一眼就能看出哪些方向被排除在威脅範圍外。
+        const MASK_COLOR_REF_M = 1500; // 遮蔽程度達到這個高度差時，顏色會變到最暗
+        for (let b = 0; b < bearingsCount; b++) {
+            const biA = b;
+            const biB = (b + 1) % bearingsCount;
+            const bearingRadA = (biA / bearingsCount) * 2 * Math.PI;
+            const bearingRadB = (biB / bearingsCount) * 2 * Math.PI;
+            const destA = destinationPoint(threatData.lat, threatData.lng, bearingRadA, rangeM);
+            const destB = destinationPoint(threatData.lat, threatData.lng, bearingRadB, rangeM);
+
+            const t = Math.max(0, Math.min(1, ((aboveGround[biA] + aboveGround[biB]) / 2) / MASK_COLOR_REF_M));
+            const segColor = Cesium.Color.lerp(Cesium.Color.RED, Cesium.Color.SLATEGRAY, t, new Cesium.Color());
+
+            const entity = viewer.entities.add({
+                name: 'Missile Threat Coverage (Terrain-Masked)',
+                wall: {
+                    positions: Cesium.Cartesian3.fromDegreesArray([destA.lng, destA.lat, destB.lng, destB.lat]),
+                    minimumHeights: [floors[biA], floors[biB]],
+                    maximumHeights: [ceilingM, ceilingM],
+                    material: segColor.withAlpha(0.4),
+                    outline: true,
+                    outlineColor: segColor.withAlpha(0.9)
+                }
+            });
+            threatDomeEntities.push(entity);
+        }
     } catch (e) {
         console.error("地形水平線計算失敗，改用未考慮地形遮蔽的簡易圓頂:", e);
         showCesiumWarning('飛彈威脅圓頂的地形遮蔽計算失敗，已改用未排除遮蔽區域的簡易圓頂。錯誤原因：' + (e && e.message ? e.message : e));
         try {
             const radiusMeters = rangeM;
-            threatDomeEntity = viewer.entities.add({
+            const entity = viewer.entities.add({
                 name: 'Missile Threat Dome (fallback)',
                 position: Cesium.Cartesian3.fromDegrees(threatData.lng, threatData.lat, 0),
                 ellipsoid: {
@@ -208,6 +218,7 @@ async function drawThreatDome(threatData) {
                     maximumCone: Cesium.Math.PI_OVER_TWO
                 }
             });
+            threatDomeEntities.push(entity);
         } catch (e2) {
             console.error("Error drawing fallback threat dome:", e2);
         }
@@ -310,7 +321,10 @@ async function drawPowerLines(powerData) {
         }
     }
 
-    const CABLE_HEIGHT_OFFSET_M = 15; // 電纜實際離地高度未知，抬高一個保守值方便目視辨識
+    // 電纜實際高度未知，用高壓電塔常見高度概估(約30公尺)。每個線段頂點在 OSM 資料裡
+    // 通常就對應一座電塔的實際位置，各自抬高到自己所在地形高度+塔高後再逐點連線，
+    // 呈現的就是「懸掛在各電塔之間」的走向，而不是貼著地形起伏走
+    const CABLE_HEIGHT_OFFSET_M = 30;
 
     let cursor = 0;
     let lineErrorCount = 0;
