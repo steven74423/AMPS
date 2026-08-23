@@ -74,6 +74,15 @@
 
         // 強制立即建立 SVG 渲染器，讓限制空域的綠色網格 <pattern> 一開始就能掛進 SVG <defs>
         L.svg({ padding: 0.5 }).addTo(map);
+
+        // [DIAG-臨時] 追蹤是誰把 popup 關掉的，排除機場天氣彈窗一秒內自動消失的問題
+        map.on('popupopen', (e) => {
+            console.log('[DIAG] popupopen', e.popup && e.popup._source && e.popup._source.options && e.popup._source.options.icon);
+        });
+        map.on('popupclose', (e) => {
+            console.log('[DIAG] popupclose 觸發了！呼叫堆疊如下:');
+            console.trace('[DIAG] popupclose stack');
+        });
         function ensureRestrictedGridPattern() {
             const svg = map.getPane('overlayPane') && map.getPane('overlayPane').querySelector('svg');
             if (!svg) return;
