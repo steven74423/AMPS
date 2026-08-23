@@ -653,7 +653,12 @@
                 { panel: 'uas-area-panel' }
             ].forEach(({ panel }) => {
                 const el = document.getElementById(panel);
-                if (el && el.style.display !== 'none' && !el.contains(e.target) && !e.target.closest('.leaflet-control-layers')) {
+                // 用 getComputedStyle 而不是 el.style.display：這兩個面板預設是用 CSS 規則設成
+                // display:none，不是 inline style，頁面剛載入、面板還沒被 JS 開關過時 el.style.display
+                // 讀到的是空字串，用 !== 'none' 判斷會誤判成「目前是開著的」，導致重新整理頁面後第一次
+                // 點擊地圖上任何東西(包含地標、標籤)都會被這裡誤判並用 stopPropagation 整個吃掉。
+                const isVisible = el && getComputedStyle(el).display !== 'none';
+                if (isVisible && !el.contains(e.target) && !e.target.closest('.leaflet-control-layers')) {
                     el.style.display = 'none';
                     closedAny = true;
                 }
