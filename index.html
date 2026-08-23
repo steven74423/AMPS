@@ -6,7 +6,7 @@
     <title>航空計畫工具 - 介面精修版</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="./css/style.css?v=8" />
+    <link rel="stylesheet" href="./css/style.css?v=9" />
 </head>
 
 <body>
@@ -110,9 +110,6 @@
             <button id="plan-btn" class="btn"
                 style="background: linear-gradient(135deg,#005f5f,#003f3f); border: 1px solid #00FFFF; color:#00FFFF;">📋
                 PLAN</button>
-            <button id="ai-btn" class="btn"
-                style="background: linear-gradient(135deg,#005f5f,#003f3f); border: 1px solid #00FFFF; color:#00FFFF;">🤖
-                AI</button>
         </div>
 
         <!-- MSA 控制項 (預設隱藏) -->
@@ -245,35 +242,6 @@
         </div>
     </div>
 
-    <!-- AI 分析 Modal -->
-    <div id="ai-modal-overlay">
-        <div id="ai-modal">
-            <div id="ai-modal-header">
-                <h2>🤖 AI 航空計畫分析 <span style="font-size:0.75em;color:#567;font-weight:normal;">by Groq</span></h2>
-                <button id="ai-modal-close" title="關閉">✕</button>
-            </div>
-            <div id="ai-modal-api-row">
-                <input type="password" id="ai-api-key-input"
-                    placeholder="輸入 Groq API Key（可至 console.groq.com 免費申請）">
-                <label id="ai-save-key-label"><input type="checkbox" id="ai-save-key-cb"> 記住</label>
-            </div>
-            <div
-                style="padding: 8px 16px; display: flex; justify-content: center; border-bottom: 1px solid #1e3a3a; background: #0a0f14;">
-                <button id="ai-analyze-btn" style="width: 100%;">▶ 開始分析</button>
-            </div>
-            <div id="ai-modal-body">
-                <div id="ai-placeholder">
-                    <span class="ai-icon-big">✈️</span>
-                    輸入 API Key 後點擊「開始分析」<br>AI 將為您的航空計畫提供安全建議
-                </div>
-                <div id="ai-loading">
-                    <div class="ai-spinner"></div><br>AI 分析中，請稍候...
-                </div>
-                <div id="ai-result"></div>
-            </div>
-        </div>
-    </div>
-
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
@@ -282,7 +250,7 @@
     <script src="./js/navaids_data.js"></script>
     <script src="./js/ad2_airports_data.js"></script>
     <script src="./js/config.js"></script>
-<script defer src="./js/main.js?v=21"></script>
+<script defer src="./js/main.js?v=22"></script>
 </body>
 
 </html>
