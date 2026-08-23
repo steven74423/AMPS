@@ -194,6 +194,7 @@ async function drawThreatDome(threatData) {
         });
     } catch (e) {
         console.error("地形水平線計算失敗，改用未考慮地形遮蔽的簡易圓頂:", e);
+        showCesiumWarning('飛彈威脅圓頂的地形遮蔽計算失敗，已改用未排除遮蔽區域的簡易圓頂。錯誤原因：' + (e && e.message ? e.message : e));
         try {
             const radiusMeters = rangeM;
             threatDomeEntity = viewer.entities.add({
@@ -279,36 +280,51 @@ function drawAirspaceVolumes(areas, colorHex, labelPrefix) {
 // 不用 clampToGround 貼地線：Cesium 的貼地線材質在地形資料還沒就緒時常會靜默失敗(不丟錯誤、就是不畫)，
 // 跟飛彈圓頂遇到的地形時機問題同一類。改成實際批次取樣地形高度，把電纜線抬高一點畫成一般 3D 線，
 // 避開貼地線這條限制較多的算繪路徑；取樣失敗時才退回 clampToGround 當作備援。
+//
+// 每條線/每個電塔各自獨立 try/catch：先把這次要用到的取樣結果切一段出來(不管後面成不成功，
+// cursor 都會先往前推進)，再嘗試建立 entity。這樣任何一條線資料異常導致例外，
+// 都不會拖累後面其他線段、也不會拖累電塔完全不畫出來(先前的版本是全部包在同一個 try 裡)。
 async function drawPowerLines(powerData) {
     if (!viewer || !powerData) return;
-    try {
-        const lines = (powerData.lines || []).filter(l => l && l.length > 1);
-        const towers = powerData.towers || [];
-        if (!lines.length && !towers.length) return;
+    const lines = (powerData.lines || []).filter(l => l && l.length > 1);
+    const towers = powerData.towers || [];
+    if (!lines.length && !towers.length) return;
 
-        const cartographics = [];
-        lines.forEach(line => line.forEach(p => cartographics.push(Cesium.Cartographic.fromDegrees(p[0], p[1]))));
-        towers.forEach(t => cartographics.push(Cesium.Cartographic.fromDegrees(t[0], t[1])));
+    const cartographics = [];
+    lines.forEach(line => line.forEach(p => cartographics.push(Cesium.Cartographic.fromDegrees(p[0], p[1]))));
+    towers.forEach(t => cartographics.push(Cesium.Cartographic.fromDegrees(t[0], t[1])));
 
-        let sampled = null;
-        if (viewer.terrainProvider && viewer.terrainProvider.availability) {
-            try {
-                sampled = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);
-            } catch (e) {
-                console.warn('高壓電纜地形取樣失敗，改用貼地線繪製:', e);
+    let sampled = null;
+    if (viewer.terrainProvider && viewer.terrainProvider.availability) {
+        try {
+            const result = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);
+            if (result && result.length === cartographics.length) {
+                sampled = result;
+            } else {
+                console.warn('高壓電纜地形取樣結果數量與座標點數不符，改用貼地線繪製。', result && result.length, cartographics.length);
+                showCesiumWarning('高壓電纜地形取樣結果數量異常，改用貼地線繪製(電纜可能因此顯示不出來)。');
             }
+        } catch (e) {
+            console.warn('高壓電纜地形取樣失敗，改用貼地線繪製:', e);
+            showCesiumWarning('高壓電纜地形取樣失敗，改用貼地線繪製(電纜可能因此顯示不出來)。錯誤原因：' + (e && e.message ? e.message : e));
         }
+    }
 
-        const CABLE_HEIGHT_OFFSET_M = 15; // 電纜實際離地高度未知，抬高一個保守值方便目視辨識
+    const CABLE_HEIGHT_OFFSET_M = 15; // 電纜實際離地高度未知，抬高一個保守值方便目視辨識
 
-        let cursor = 0;
-        lines.forEach(line => {
+    let cursor = 0;
+    let lineErrorCount = 0;
+    lines.forEach(line => {
+        const lineSamples = sampled ? sampled.slice(cursor, cursor + line.length) : null;
+        if (sampled) cursor += line.length;
+
+        try {
             let positions;
-            if (sampled) {
+            if (lineSamples) {
                 const flat = [];
-                line.forEach(p => {
-                    const h = (sampled[cursor].height || 0) + CABLE_HEIGHT_OFFSET_M;
-                    cursor++;
+                line.forEach((p, idx) => {
+                    const s = lineSamples[idx];
+                    const h = (s && s.height != null ? s.height : 0) + CABLE_HEIGHT_OFFSET_M;
                     flat.push(p[0], p[1], h);
                 });
                 positions = Cesium.Cartesian3.fromDegreesArrayHeights(flat);
@@ -323,25 +339,37 @@ async function drawPowerLines(powerData) {
                 polyline: {
                     positions: positions,
                     width: 3,
-                    clampToGround: !sampled,
+                    clampToGround: !lineSamples,
                     material: new Cesium.PolylineDashMaterialProperty({
                         color: Cesium.Color.RED,
                         dashLength: 16
                     })
                 }
             });
-        });
+        } catch (e) {
+            lineErrorCount++;
+            console.error('繪製單一電纜線段失敗:', e);
+        }
+    });
+    if (lineErrorCount) {
+        console.error(`高壓電纜：共 ${lineErrorCount}/${lines.length} 條線段繪製失敗`);
+        showCesiumWarning(`高壓電纜：${lines.length} 條線段中有 ${lineErrorCount} 條繪製失敗，詳細錯誤請查看瀏覽器 Console。`);
+    }
 
-        towers.forEach(t => {
+    let towerErrorCount = 0;
+    towers.forEach(t => {
+        const towerSample = sampled ? sampled[cursor] : null;
+        if (sampled) cursor++;
+
+        try {
             let position, heightReference;
-            if (sampled) {
-                position = Cesium.Cartesian3.fromDegrees(t[0], t[1], sampled[cursor].height || 0);
+            if (towerSample) {
+                position = Cesium.Cartesian3.fromDegrees(t[0], t[1], towerSample.height != null ? towerSample.height : 0);
                 heightReference = Cesium.HeightReference.NONE;
             } else {
                 position = Cesium.Cartesian3.fromDegrees(t[0], t[1]);
                 heightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
             }
-            cursor++;
 
             viewer.entities.add({
                 name: '電塔',
@@ -354,19 +382,22 @@ async function drawPowerLines(powerData) {
                     heightReference: heightReference
                 }
             });
-        });
-    } catch (e) {
-        console.error('Error drawing power lines:', e);
-    }
+        } catch (e) {
+            towerErrorCount++;
+            console.error('繪製單一電塔失敗:', e);
+        }
+    });
+    if (towerErrorCount) console.error(`電塔：共 ${towerErrorCount}/${towers.length} 個繪製失敗`);
 }
 
-// 在畫面上顯示一個顯眼的警告框(不用開發人員工具也看得到)，用來標示 Cesium token/地形載入問題
+// 在畫面上顯示一個顯眼的警告框(不用開發人員工具也看得到)，用來標示 Cesium token/地形載入問題。
+// 多次呼叫會疊加訊息(換行分隔)，讓同一次載入期間發生的好幾個問題可以一次看到，不用重新整理反覆測試。
 function showCesiumWarning(message) {
     const el = document.getElementById('cesium-token-warning');
-    if (el) {
-        el.textContent = '⚠️ ' + message;
-        el.style.display = 'block';
-    }
+    if (!el) return;
+    const line = '⚠️ ' + message;
+    el.textContent = el.style.display === 'block' && el.textContent ? (el.textContent + '\n\n' + line) : line;
+    el.style.display = 'block';
 }
 
 function initCesium() {
