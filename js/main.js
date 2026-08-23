@@ -75,14 +75,6 @@
         // 強制立即建立 SVG 渲染器，讓限制空域的綠色網格 <pattern> 一開始就能掛進 SVG <defs>
         L.svg({ padding: 0.5 }).addTo(map);
 
-        // [DIAG-臨時] 追蹤是誰把 popup 關掉的，排除機場天氣彈窗一秒內自動消失的問題
-        map.on('popupopen', (e) => {
-            console.log('[DIAG] popupopen', e.popup && e.popup._source && e.popup._source.options && e.popup._source.options.icon);
-        });
-        map.on('popupclose', (e) => {
-            console.log('[DIAG] popupclose 觸發了！呼叫堆疊如下:');
-            console.trace('[DIAG] popupclose stack');
-        });
         function ensureRestrictedGridPattern() {
             const svg = map.getPane('overlayPane') && map.getPane('overlayPane').querySelector('svg');
             if (!svg) return;
@@ -992,12 +984,12 @@
 
                     let marker = weatherMarkers[m.icaoId];
                     if (!marker) {
+                        // 不額外手動綁 click 事件：bindPopup() 本身就會自動幫 marker 加上「點擊切換開關」
+                        // 的預設行為，額外自己再呼叫一次 openPopup() 反而會跟 Leaflet 內建的開關邏輯打架
+                        // ——我們先把它打開，Leaflet 緊接著發現「已經是開啟狀態」就當成再點一次要關閉，
+                        // 導致彈窗跳出來不到一秒就自動關掉。
                         marker = L.marker([m.lat, m.lon], { icon: buildWeatherIcon(m.icaoId, color) });
                         marker.addTo(weatherLayer);
-                        marker.on('click', (e) => {
-                            if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
-                            marker.openPopup();
-                        });
                         weatherMarkers[m.icaoId] = marker;
                     } else {
                         marker.setIcon(buildWeatherIcon(m.icaoId, color));
