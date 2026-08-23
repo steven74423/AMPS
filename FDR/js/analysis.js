@@ -147,14 +147,93 @@ function waitForTerrainReady(timeoutMs) {
 }
 
 let threatViewshedLayer = null;
+let threatDomePrimitives = [];
 
 function removeThreatDomeVisuals() {
     threatDomeEntities.forEach(ent => { try { viewer.entities.remove(ent); } catch (e) { } });
     threatDomeEntities = [];
+    threatDomePrimitives.forEach(prim => { try { viewer.scene.primitives.remove(prim); } catch (e) { } });
+    threatDomePrimitives = [];
     if (threatViewshedLayer) {
         try { viewer.imageryLayers.remove(threatViewshedLayer); } catch (e) { }
         threatViewshedLayer = null;
     }
+}
+
+// 把多層高度切片(polygonSlices，由低到高每層都是以飛彈為中心的星形多邊形邊界)
+// 組成一個立體網格：側面用相鄰兩層之間逐段連成三角形，底面/頂面用「以飛彈位置為圓心」的
+// 扇形三角化封起來(邊界本身保證是星形、不自相交，所以扇形三角化一定合法)。
+// 這樣拉出來的形狀會隨高度自然展開變寬，某方向若連天花板都被地形擋住(該層邊界趨近飛彈位置本身)，
+// 堆疊起來就會呈現自然內凹的缺口，而不是同一個平面形狀直接拉伸成的柱體。
+function buildThreatDomePrimitive(polygonSlices, centerLng, centerLat) {
+    const slices = (polygonSlices || []).filter(s => s && Array.isArray(s.ring) && s.ring.length > 2);
+    if (slices.length < 2) return null;
+    const vertsPerRing = slices[0].ring.length;
+    for (const s of slices) {
+        if (s.ring.length !== vertsPerRing) return null; // 每層頂點數應該一致，不一致就放棄改用備援方案
+    }
+
+    const positions = [];
+    slices.forEach(s => {
+        s.ring.forEach(pt => {
+            const c = Cesium.Cartesian3.fromDegrees(pt[0], pt[1], s.altM);
+            positions.push(c.x, c.y, c.z);
+        });
+    });
+    const bottomCenter = Cesium.Cartesian3.fromDegrees(centerLng, centerLat, slices[0].altM);
+    const topCenter = Cesium.Cartesian3.fromDegrees(centerLng, centerLat, slices[slices.length - 1].altM);
+    const bottomCenterIdx = positions.length / 3;
+    positions.push(bottomCenter.x, bottomCenter.y, bottomCenter.z);
+    const topCenterIdx = bottomCenterIdx + 1;
+    positions.push(topCenter.x, topCenter.y, topCenter.z);
+
+    const indices = [];
+    const N = vertsPerRing - 1; // 每層最後一點是封閉環重複的第一點，實際邊數是 N
+
+    for (let k = 0; k < slices.length - 1; k++) {
+        const baseA = k * vertsPerRing;
+        const baseB = (k + 1) * vertsPerRing;
+        for (let i = 0; i < N; i++) {
+            const a0 = baseA + i, a1 = baseA + i + 1;
+            const b0 = baseB + i, b1 = baseB + i + 1;
+            indices.push(a0, a1, b0);
+            indices.push(a1, b1, b0);
+        }
+    }
+    for (let i = 0; i < N; i++) {
+        indices.push(bottomCenterIdx, i + 1, i);
+    }
+    const topBase = (slices.length - 1) * vertsPerRing;
+    for (let i = 0; i < N; i++) {
+        indices.push(topCenterIdx, topBase + i, topBase + i + 1);
+    }
+
+    const geometry = new Cesium.Geometry({
+        attributes: {
+            position: new Cesium.GeometryAttribute({
+                componentDatatype: Cesium.ComponentDatatype.DOUBLE,
+                componentsPerAttribute: 3,
+                values: new Float64Array(positions)
+            })
+        },
+        indices: new Uint32Array(indices),
+        primitiveType: Cesium.PrimitiveType.TRIANGLES,
+        boundingSphere: Cesium.BoundingSphere.fromVertices(positions)
+    });
+
+    const instance = new Cesium.GeometryInstance({
+        geometry: geometry,
+        attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED.withAlpha(0.35))
+        }
+    });
+
+    // closed 保持預設(false) 不啟用背面剔除，避免手刻三角形時繞向沒抓對導致某些角度看不到
+    return new Cesium.Primitive({
+        geometryInstances: instance,
+        appearance: new Cesium.PerInstanceColorAppearance({ flat: true, translucent: true }),
+        asynchronous: false
+    });
 }
 
 async function drawThreatDome(threatData, viewshedImage) {
@@ -162,7 +241,23 @@ async function drawThreatDome(threatData, viewshedImage) {
 
     removeThreatDomeVisuals();
 
-    // 最優方案：地圖端(main.js)在逐角度掃描地形時，同步記錄了每個角度「目標高度仍可被偵測到」
+    // 最優方案：地圖端(main.js)在逐角度掃描地形時，同步算出多層高度切片(polygonSlices)的
+    // 可偵測邊界，組成隨高度展開、缺口自然內凹的立體網格。
+    if (viewshedImage && Array.isArray(viewshedImage.polygonSlices) && viewshedImage.polygonSlices.length >= 2) {
+        try {
+            const primitive = buildThreatDomePrimitive(viewshedImage.polygonSlices, threatData.lng, threatData.lat);
+            if (primitive) {
+                viewer.scene.primitives.add(primitive);
+                threatDomePrimitives.push(primitive);
+                return;
+            }
+        } catch (e) {
+            console.error('威脅範圍立體網格繪製失敗，改用單層拉伸:', e);
+            showCesiumWarning('威脅範圍立體網格繪製失敗，已改用較簡化的單層拉伸。錯誤原因：' + (e && e.message ? e.message : e));
+        }
+    }
+
+    // 次要方案：地圖端(main.js)在逐角度掃描地形時，同步記錄了每個角度「目標高度仍可被偵測到」
     // 的最遠距離，這些點連起來天生就是一個平滑、不自相交的多邊形(星形polygon)，
     // 不需要額外做等高線追蹤。
     // 拉伸範圍是「設定高度 -> 天花板」，不是「地面 -> 設定高度」：

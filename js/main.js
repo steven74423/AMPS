@@ -2037,6 +2037,10 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             const idx = (Math.floor(cy) * canvas.width + Math.floor(cx)) * 4;
             const missileElev = (data[idx] * 256 + data[idx + 1] + data[idx + 2] / 256) - 32768;
             const targetAltM = targetAltFt * 0.3048; // 換算公尺
+            // 雷達本身的最大偵測距離(斜距)決定了立體範圍能拉多高：正上方最多只能偵測到
+            // missileElev + rangeM 的高度，不可能超過雷達的最大射程
+            const ceilingAltM = missileElev + (rangeKm * 1000);
+            const numAltSlices = 10; // 立體圓頂用幾層高度切片堆疊出來，越多越平滑但資料量越大
 
             // --- [精準優化] 計算該緯度下的實際每像素公尺數 (Web Mercator) ---
             const earthCircumference = 40075016.686; // 赤道周長 (公尺)
@@ -2048,7 +2052,7 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             // --- 使用 Web Worker 進行計算以避免凍結主線程 ---
             const workerCode = `
                 self.onmessage = function(e) {
-                    const { buffer, width, height, cx, cy, missileElev, targetAltM, maxDistPx, metersPerPixel } = e.data;
+                    const { buffer, width, height, cx, cy, missileElev, targetAltM, maxDistPx, metersPerPixel, ceilingAltM, numAltSlices } = e.data;
                     const data = new Uint8ClampedArray(buffer);
                     const outData = new Uint8ClampedArray(width * height * 4); // 預設全部為透明(0)
 
@@ -2058,12 +2062,24 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     // 這是沿著同一條掃描線順便記錄下來的，不用另外重算，用來畫出平滑邊緣的可偵測範圍多邊形
                     const boundaryR = new Float32Array(angleCount);
 
+                    // 高度切片：從設定高度到天花板均分成 numAltSlices 層，同一條掃描線一次算出
+                    // 每一層的可偵測邊界，飛越高邊界通常越遠(地形遮蔽角固定、飛越高越容易超過)，
+                    // 疊起來就會呈現隨高度展開的立體圓頂；某方向若連天花板都被地形擋住，
+                    // 該方向每一層的邊界會趨近 0，堆疊起來就是自然內凹的缺口
+                    const sliceAltM = new Float32Array(numAltSlices);
+                    for (let k = 0; k < numAltSlices; k++) {
+                        sliceAltM[k] = targetAltM + (ceilingAltM - targetAltM) * (k / (numAltSlices - 1));
+                    }
+                    const sliceBoundaryR = new Float32Array(angleCount * numAltSlices);
+                    const sliceFarthest = new Float32Array(numAltSlices);
+
                     for (let ai = 0; ai < angleCount; ai++) {
                         const angle = ai * angleStep;
                         const rad = angle * Math.PI / 180;
                         const dx = Math.cos(rad); const dy = Math.sin(rad);
                         let maxSlope = -9999;
                         let farthestVisibleR = 0;
+                        sliceFarthest.fill(0);
 
                         for (let r = 1; r < maxDistPx; r++) {
                             const px = Math.floor(cx + dx * r);
@@ -2090,11 +2106,20 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                                 outData[i+3] = 100; // Alpha
                                 farthestVisibleR = r;
                             }
+
+                            for (let k = 0; k < numAltSlices; k++) {
+                                const sAlt = sliceAltM[k];
+                                const sSlope = (sAlt - curvatureDrop - missileElev) / r;
+                                if (sSlope > maxSlope && sAlt > terrainElev) {
+                                    sliceFarthest[k] = r;
+                                }
+                            }
                         }
                         boundaryR[ai] = farthestVisibleR;
+                        for (let k = 0; k < numAltSlices; k++) sliceBoundaryR[ai * numAltSlices + k] = sliceFarthest[k];
                     }
                     // 將結果傳回主線程 (同樣使用記憶體轉移)
-                    self.postMessage({ outBuffer: outData.buffer, boundaryR: Array.from(boundaryR) }, [outData.buffer]);
+                    self.postMessage({ outBuffer: outData.buffer, boundaryR: Array.from(boundaryR), sliceBoundaryR: Array.from(sliceBoundaryR) }, [outData.buffer]);
                 };
             `;
 
@@ -2141,13 +2166,43 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                         }
                     }
 
-                    // 記錄這次計算結果(紅色遮罩圖+範圍+平滑多邊形)，供 3D PVW 直接沿用同一份計算結果，
-                    // 確保 2D/3D 呈現的雷達可偵測範圍完全一致(3D 端不再另外用簡化公式重算一次)
+                    // 把多層高度切片的邊界也轉成經緯度多邊形，由低到高疊起來，3D PVW 可以拉出
+                    // 隨高度展開、缺口自然內凹的立體圓頂，而不是同一個平面形狀直接拉伸
+                    const sliceBoundaryRFlat = e.data.sliceBoundaryR || [];
+                    const polygonSlices = [];
+                    if (sliceBoundaryRFlat.length > 0 && numAltSlices > 0) {
+                        const totalAngles = sliceBoundaryRFlat.length / numAltSlices;
+                        const sliceAngleStep = 360 / totalAngles;
+                        const sliceDownsampleEvery = 8; // 每2度取一個頂點(多層堆疊，稍微降低單層密度以控制資料量)
+                        for (let k = 0; k < numAltSlices; k++) {
+                            const sAltM = targetAltM + (ceilingAltM - targetAltM) * (k / (numAltSlices - 1));
+                            const ring = [];
+                            for (let ai = 0; ai < totalAngles; ai += sliceDownsampleEvery) {
+                                const rad = (ai * sliceAngleStep) * Math.PI / 180;
+                                const r = sliceBoundaryRFlat[ai * numAltSlices + k];
+                                const px = cx + Math.cos(rad) * r;
+                                const py = cy + Math.sin(rad) * r;
+                                const tileX = (centerTile.x - buffer) + px / tileSize;
+                                const tileY = (centerTile.y - buffer) + py / tileSize;
+                                const ll = pointToLatLng(tileX, tileY, z);
+                                ring.push([ll.lng, ll.lat]);
+                            }
+                            if (ring.length > 2) {
+                                ring.push(ring[0]); // 封閉環
+                                polygonSlices.push({ altM: sAltM, ring: ring });
+                            }
+                        }
+                    }
+
+                    // 記錄這次計算結果(紅色遮罩圖+範圍+平滑多邊形+多層高度切片)，供 3D PVW 直接沿用
+                    // 同一份計算結果，確保 2D/3D 呈現的雷達可偵測範圍完全一致(3D 端不再另外用簡化公式重算一次)
                     window.lastViewshedResult = {
                         dataUrl: outputCanvas.toDataURL(),
                         bounds: { south: southWest.lat, west: southWest.lng, north: northEast.lat, east: northEast.lng },
                         polygon: viewshedPolygon,
-                        missileElev: missileElev // 飛彈(威脅源)所在地面高程(MSL公尺)，供 3D 端計算偵測範圍天花板用
+                        polygonSlices: polygonSlices, // 由低(設定高度)到高(雷達最大射程天花板)排列
+                        missileElev: missileElev, // 飛彈(威脅源)所在地面高程(MSL公尺)
+                        ceilingAltM: ceilingAltM
                     };
                     resolve();
                 };
@@ -2162,7 +2217,9 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     missileElev: missileElev,
                     targetAltM: targetAltM,
                     maxDistPx: maxDistPx,
-                    metersPerPixel: metersPerPixel
+                    metersPerPixel: metersPerPixel,
+                    ceilingAltM: ceilingAltM,
+                    numAltSlices: numAltSlices
                 }, [imgData.data.buffer]);
             });
 
