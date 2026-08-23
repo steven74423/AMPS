@@ -646,6 +646,12 @@
             cursor: pointer;
         }
 
+        /* Leaflet 彈窗(popup)淡入動畫在這個頁面上會卡在 opacity:0(可能跟其他 CSS/瀏覽器互動有關，
+           實際原因不明，但畫面上彈窗會完全透明看不見)，強制蓋回可見，不影響其他版面 */
+        .leaflet-popup {
+            opacity: 1 !important;
+        }
+
         @media (max-width: 768px) {
             .big-label {
                 font-size: 1.5em !important;

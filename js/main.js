@@ -677,7 +677,6 @@
             }
 
             if (closedAny) {
-                console.log('[DIAG] document capture click: 判斷為「點擊面板外部」，已 stopPropagation 吃掉這次點擊', e.target);
                 e.stopPropagation();
                 e.preventDefault();
             }
@@ -987,21 +986,8 @@
                         marker = L.marker([m.lat, m.lon], { icon: buildWeatherIcon(m.icaoId, color) });
                         marker.addTo(weatherLayer);
                         marker.on('click', (e) => {
-                            console.log('[DIAG] weather marker click 事件有觸發:', m.icaoId);
                             if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
                             marker.openPopup();
-                            const popup = marker.getPopup();
-                            console.log('[DIAG] marker.openPopup() 已呼叫，isPopupOpen=', marker.isPopupOpen(),
-                                ' popup物件存在=', !!popup,
-                                ' popup._container存在=', !!(popup && popup._container),
-                                ' _container是否在畫面DOM中=', !!(popup && popup._container && document.body.contains(popup._container)),
-                                ' DOM裡.leaflet-popup數量=', document.querySelectorAll('.leaflet-popup').length,
-                                ' popupPane存在=', !!map.getPane('popupPane'));
-                            if (popup && popup._container) {
-                                const r = popup._container.getBoundingClientRect();
-                                const s = getComputedStyle(popup._container);
-                                console.log('[DIAG] popup._container rect=', JSON.stringify(r), ' display=', s.display, ' visibility=', s.visibility, ' opacity=', s.opacity);
-                            }
                         });
                         weatherMarkers[m.icaoId] = marker;
                     } else {
@@ -1456,7 +1442,6 @@
         }
 
         map.on('click', e => {
-            console.log('[DIAG] map click 事件有觸發, target=', e.originalEvent && e.originalEvent.target);
             // 嚴格攔截所有在地標與標籤上的點擊，防止穿透到底圖生成航向點
             if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest) {
                 if (e.originalEvent.target.closest('.leaflet-popup') ||
@@ -1464,7 +1449,6 @@
                     e.originalEvent.target.closest('.leaflet-tooltip') ||
                     e.originalEvent.target.closest('.navaid-icon') ||
                     e.originalEvent.target.closest('.navaid-label')) {
-                    console.log('[DIAG] map click: 命中排除清單(標記/彈窗/標籤)，return 不新增航點');
                     return;
                 }
             }
