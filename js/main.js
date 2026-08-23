@@ -2052,21 +2052,29 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     const data = new Uint8ClampedArray(buffer);
                     const outData = new Uint8ClampedArray(width * height * 4); // 預設全部為透明(0)
 
-                    for (let angle = 0; angle < 360; angle += 0.25) {
+                    const angleStep = 0.25;
+                    const angleCount = Math.round(360 / angleStep);
+                    // 每個角度「最遠可偵測到的像素距離」(0 = 這個方向完全偵測不到)，
+                    // 這是沿著同一條掃描線順便記錄下來的，不用另外重算，用來畫出平滑邊緣的可偵測範圍多邊形
+                    const boundaryR = new Float32Array(angleCount);
+
+                    for (let ai = 0; ai < angleCount; ai++) {
+                        const angle = ai * angleStep;
                         const rad = angle * Math.PI / 180;
                         const dx = Math.cos(rad); const dy = Math.sin(rad);
                         let maxSlope = -9999;
-                        
+                        let farthestVisibleR = 0;
+
                         for (let r = 1; r < maxDistPx; r++) {
                             const px = Math.floor(cx + dx * r);
                             const py = Math.floor(cy + dy * r);
                             if (px < 0 || py < 0 || px >= width || py >= height) break;
-                            
+
                             const i = (py * width + px) * 4;
                             const terrainElev = (data[i] * 256 + data[i+1] + data[i+2] / 256) - 32768;
-                            
+
                             // [論文等級優化] 根據緯度精準計算當下像素的實際距離
-                            const distM = r * metersPerPixel; 
+                            const distM = r * metersPerPixel;
                             const curvatureDrop = (distM * distM) / 12742000; // 地球曲率修正
                             const effectiveTerrainElev = terrainElev - curvatureDrop;
 
@@ -2074,17 +2082,19 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                             if (slope > maxSlope) maxSlope = slope;
 
                             const targetSlope = (targetAltM - curvatureDrop - missileElev) / r;
-                            
+
                             if (targetSlope > maxSlope && targetAltM > terrainElev) {
                                 outData[i] = 255;   // R
                                 outData[i+1] = 0;   // G
                                 outData[i+2] = 0;   // B
                                 outData[i+3] = 100; // Alpha
+                                farthestVisibleR = r;
                             }
                         }
+                        boundaryR[ai] = farthestVisibleR;
                     }
                     // 將結果傳回主線程 (同樣使用記憶體轉移)
-                    self.postMessage({ outBuffer: outData.buffer }, [outData.buffer]);
+                    self.postMessage({ outBuffer: outData.buffer, boundaryR: Array.from(boundaryR) }, [outData.buffer]);
                 };
             `;
 
@@ -2107,11 +2117,36 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
 
                     L.imageOverlay(outputCanvas.toDataURL(), bounds).addTo(missileLayer);
 
-                    // 記錄這次計算結果(紅色遮罩圖+範圍)，供 3D PVW 直接沿用同一份計算結果貼到地球表面，
+                    // 把每個角度算出的「最遠可偵測距離」轉成經緯度多邊形：跟掃描時同一個角度解析度，
+                    // 取樣夠密(每1度一個頂點)所以邊緣是平滑的，不是網格/馬賽克，3D PVW 可以直接拿來拉伸成立體範圍
+                    const boundaryR = e.data.boundaryR || [];
+                    let viewshedPolygon = null;
+                    if (boundaryR.length > 0) {
+                        const angleStep = 360 / boundaryR.length;
+                        const downsampleEvery = 4; // 0.25° * 4 = 每1度取一個頂點，360個頂點已經很平滑
+                        const ring = [];
+                        for (let ai = 0; ai < boundaryR.length; ai += downsampleEvery) {
+                            const rad = (ai * angleStep) * Math.PI / 180;
+                            const r = boundaryR[ai];
+                            const px = cx + Math.cos(rad) * r;
+                            const py = cy + Math.sin(rad) * r;
+                            const tileX = (centerTile.x - buffer) + px / tileSize;
+                            const tileY = (centerTile.y - buffer) + py / tileSize;
+                            const ll = pointToLatLng(tileX, tileY, z);
+                            ring.push([ll.lng, ll.lat]);
+                        }
+                        if (ring.length > 2) {
+                            ring.push(ring[0]); // 封閉環
+                            viewshedPolygon = ring;
+                        }
+                    }
+
+                    // 記錄這次計算結果(紅色遮罩圖+範圍+平滑多邊形)，供 3D PVW 直接沿用同一份計算結果，
                     // 確保 2D/3D 呈現的雷達可偵測範圍完全一致(3D 端不再另外用簡化公式重算一次)
                     window.lastViewshedResult = {
                         dataUrl: outputCanvas.toDataURL(),
-                        bounds: { south: southWest.lat, west: southWest.lng, north: northEast.lat, east: northEast.lng }
+                        bounds: { south: southWest.lat, west: southWest.lng, north: northEast.lat, east: northEast.lng },
+                        polygon: viewshedPolygon
                     };
                     resolve();
                 };

@@ -162,7 +162,41 @@ async function drawThreatDome(threatData, viewshedImage) {
 
     removeThreatDomeVisuals();
 
-    // 優先方案：直接沿用地圖端(main.js 防空隱蔽分析)已經逐點算好的雷達可偵測範圍遮罩圖，
+    // 最優方案：地圖端(main.js)在逐角度掃描地形時，同步記錄了每個角度「目標高度仍可被偵測到」
+    // 的最遠距離，這些點連起來天生就是一個平滑、不自相交的多邊形(星形polygon)，
+    // 不需要額外做等高線追蹤。把它從地面拉伸(extrude)到設定的目標高度，
+    // 就能呈現「立體、邊緣平滑」的可偵測範圍，且跟 2D 地圖上的遮罩完全一致。
+    if (viewshedImage && Array.isArray(viewshedImage.polygon) && viewshedImage.polygon.length > 3) {
+        try {
+            const degreesArray = [];
+            viewshedImage.polygon.forEach(pt => { degreesArray.push(pt[0], pt[1]); });
+            const targetAltM = (threatData.altFt || 500) * 0.3048;
+
+            const entity = viewer.entities.add({
+                name: '雷達可偵測範圍(立體)',
+                polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArray(degreesArray),
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                    extrudedHeight: targetAltM,
+                    extrudedHeightReference: Cesium.HeightReference.NONE,
+                    material: Cesium.Color.RED.withAlpha(0.35),
+                    outline: true,
+                    outlineColor: Cesium.Color.RED.withAlpha(0.9),
+                    outlineWidth: 2,
+                    perPositionHeight: false,
+                    closeTop: true,
+                    closeBottom: true
+                }
+            });
+            threatDomeEntities.push(entity);
+            return;
+        } catch (e) {
+            console.error('威脅範圍立體多邊形繪製失敗，改用平面貼圖:', e);
+            showCesiumWarning('威脅範圍立體多邊形繪製失敗，已改用平面貼圖。錯誤原因：' + (e && e.message ? e.message : e));
+        }
+    }
+
+    // 次要方案：直接沿用地圖端(main.js 防空隱蔽分析)已經逐點算好的雷達可偵測範圍遮罩圖，
     // 貼到地球表面上(跟貼衛星圖同一種機制，會自動服貼地形)。這張圖本來就已經考慮了地形遮蔽、
     // 地球曲率、以及同一方向不同距離的差異，不是只依方位角的簡化估算，
     // 確保 3D 看到的可偵測範圍跟 2D 地圖上完全一致。
