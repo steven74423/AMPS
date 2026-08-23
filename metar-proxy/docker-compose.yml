@@ -4,8 +4,7 @@ services:
     container_name: metar-proxy
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "3011:3001"
     environment:
       PORT: "3001"
-      # 建議改成你實際的 AMPS 網域，例如 https://steven74423.github.io，避免被其他網站盜用
-      ALLOWED_ORIGIN: "*"
+      ALLOWED_ORIGIN: "https://stevenkate.synology.me"
