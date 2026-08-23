@@ -990,7 +990,18 @@
                             console.log('[DIAG] weather marker click 事件有觸發:', m.icaoId);
                             if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
                             marker.openPopup();
-                            console.log('[DIAG] marker.openPopup() 已呼叫，isPopupOpen=', marker.isPopupOpen());
+                            const popup = marker.getPopup();
+                            console.log('[DIAG] marker.openPopup() 已呼叫，isPopupOpen=', marker.isPopupOpen(),
+                                ' popup物件存在=', !!popup,
+                                ' popup._container存在=', !!(popup && popup._container),
+                                ' _container是否在畫面DOM中=', !!(popup && popup._container && document.body.contains(popup._container)),
+                                ' DOM裡.leaflet-popup數量=', document.querySelectorAll('.leaflet-popup').length,
+                                ' popupPane存在=', !!map.getPane('popupPane'));
+                            if (popup && popup._container) {
+                                const r = popup._container.getBoundingClientRect();
+                                const s = getComputedStyle(popup._container);
+                                console.log('[DIAG] popup._container rect=', JSON.stringify(r), ' display=', s.display, ' visibility=', s.visibility, ' opacity=', s.opacity);
+                            }
                         });
                         weatherMarkers[m.icaoId] = marker;
                     } else {
