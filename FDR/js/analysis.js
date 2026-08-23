@@ -797,83 +797,91 @@ function updateUI() {
     seek(0);
 }
 
-function seek(index) {
-    index = parseInt(index);
-    const data = missionData[index];
-    if (!data) return;
+function seek(rawIndex) {
+    const maxIndex = missionData.length - 1;
+    if (maxIndex < 0) return;
+    // 播放時傳進來的是連續的小數(每個 requestAnimationFrame 都會推進一點點)，
+    // 在兩個航跡點之間用線性內插算出當下畫面該顯示的位置，而不是等 index 整數進位才跳一次，
+    // 這樣不管原始航跡點間距多寬，播放起來都會是連續移動而不是格放跳格；
+    // 手動拖曳時間軸傳進來的一定是整數，frac 會是 0，行為跟以前完全一樣
+    const index = Math.max(0, Math.min(parseFloat(rawIndex) || 0, maxIndex));
+    const i0 = Math.floor(index);
+    const i1 = Math.min(i0 + 1, maxIndex);
+    const frac = index - i0;
+
+    const d0 = missionData[i0];
+    const d1 = missionData[i1];
+    if (!d0) return;
+
+    const data = {
+        lat: d0.lat + (d1.lat - d0.lat) * frac,
+        lon: d0.lon + (d1.lon - d0.lon) * frac,
+        alt: d0.alt + (d1.alt - d0.alt) * frac,
+        time: d0.time
+    };
 
     currentTimeLabel.textContent = data.time;
-    
-    // Sync all sliders
+
+    // Sync all sliders (滑桿本身仍然對齊整數點，避免拖曳體驗變得怪異)
+    const sliderIndex = Math.round(index);
     timeSliders.forEach(slider => {
-        if (slider.value !== index.toString()) {
-            slider.value = index;
+        if (slider.value !== sliderIndex.toString()) {
+            slider.value = sliderIndex;
         }
     });
-    
+
     // Sync Cesium Marker
     if (is3DMode && viewer && cesiumMarker) {
         const position = Cesium.Cartesian3.fromDegrees(data.lon, data.lat, data.alt * 0.3048);
         cesiumMarker.position = position;
-        
+
         let heading = 0;
         let pitch = 0;
 
-        if (index < missionData.length - 1) {
-            const nextData = missionData[index + 1];
-            heading = getBearing(data.lat, data.lon, nextData.lat, nextData.lon);
-            const dist = getDistance(data.lat, data.lon, nextData.lat, nextData.lon);
-            const altDiff = (nextData.alt - data.alt) * 0.3048; // meters
+        if (i0 < maxIndex) {
+            heading = getBearing(d0.lat, d0.lon, d1.lat, d1.lon);
+            const dist = getDistance(d0.lat, d0.lon, d1.lat, d1.lon);
+            const altDiff = (d1.alt - d0.alt) * 0.3048; // meters
             pitch = dist > 0 ? Math.atan2(altDiff, dist) : 0;
-        } else if (index > 0) {
-            const prevData = missionData[index - 1];
-            heading = getBearing(prevData.lat, prevData.lon, data.lat, data.lon);
+        } else if (i0 > 0) {
+            const prevData = missionData[i0 - 1];
+            heading = getBearing(prevData.lat, prevData.lon, d0.lat, d0.lon);
         }
 
         // Apply orientation to 3D Model
         // 為了抵銷大部分預設模型朝向 +X 的特性，Heading 會減去 90 度 (Math.PI/2)
         const hpr = new Cesium.HeadingPitchRoll(
-            Cesium.Math.toRadians(heading - 90), 
-            pitch, 
+            Cesium.Math.toRadians(heading - 90),
+            pitch,
             0 // Roll
         );
         cesiumMarker.orientation = Cesium.Transforms.headingPitchRollQuaternion(position, hpr);
 
         // --- Pilot View Camera Update ---
         if (isPilotView) {
-            let heading = 0;
-            let pitch = -15; // 視角向下 15 度，以便看見前下方
-            
-            // Calculate heading to next point
-            if (index < missionData.length - 1) {
-                const nextData = missionData[index + 1];
-                heading = getBearing(data.lat, data.lon, nextData.lat, nextData.lon);
-            } else if (index > 0) {
-                const prevData = missionData[index - 1];
-                heading = getBearing(prevData.lat, prevData.lon, data.lat, data.lon);
-            }
+            let pitch2 = -15; // 視角向下 15 度，以便看見前下方
 
-            const hpr = new Cesium.HeadingPitchRoll(
-                Cesium.Math.toRadians(heading), 
-                Cesium.Math.toRadians(pitch), 
+            const hpr2 = new Cesium.HeadingPitchRoll(
+                Cesium.Math.toRadians(heading),
+                Cesium.Math.toRadians(pitch2),
                 0
             );
-            
+
             // 計算往前推移的座標偏移量，避免機身 (放大 10 倍) 擋住視線
             // 約往前 20 公尺，往上 5 公尺
             const forwardMeters = 20;
             const upMeters = 5;
-            
+
             const latOffset = (forwardMeters / 111320) * Math.cos(Cesium.Math.toRadians(heading));
             const lonOffset = (forwardMeters / (111320 * Math.cos(Cesium.Math.toRadians(data.lat)))) * Math.sin(Cesium.Math.toRadians(heading));
-            
+
             const cameraLat = data.lat + latOffset;
             const cameraLon = data.lon + lonOffset;
             const cameraAlt = data.alt * 0.3048 + upMeters;
-            
+
             viewer.camera.setView({
                 destination: Cesium.Cartesian3.fromDegrees(cameraLon, cameraLat, cameraAlt),
-                orientation: hpr
+                orientation: hpr2
             });
         }
 
@@ -984,12 +992,14 @@ function startPlayback() {
         
         if (currentPlaybackIdx >= missionData.length - 1) {
             currentPlaybackIdx = missionData.length - 1;
-            seek(Math.floor(currentPlaybackIdx));
+            seek(currentPlaybackIdx);
             if (playBtn) playBtn.click(); // 自動暫停
             return;
         }
-        
-        seek(Math.floor(currentPlaybackIdx));
+
+        // 傳小數進去，seek() 會在相鄰兩個航跡點之間內插，每一幀畫面都會連續移動，
+        // 不再是等累積滿一個整數點才跳一次(之前這裡是 Math.floor，會格放)
+        seek(currentPlaybackIdx);
         playbackInterval = requestAnimationFrame(loop);
     }
     
