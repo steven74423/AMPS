@@ -944,13 +944,15 @@
             });
         }
 
+        // 沿用飛航分類標準的語意順序(VFR最好 -> LIFR最差)，但改用低飽和度的軍規戰術色調，
+        // 不用鮮豔螢光色
         function flightCategoryColor(cat) {
             switch (cat) {
-                case 'VFR': return '#00CC44';
-                case 'MVFR': return '#0080FF';
-                case 'IFR': return '#FF3B30';
-                case 'LIFR': return '#FF00FF';
-                default: return '#888888';
+                case 'VFR': return '#4A6741';   // 橄欖綠
+                case 'MVFR': return '#3A6EA5';  // 暗鋼藍
+                case 'IFR': return '#8B3A3A';   // 暗紅
+                case 'LIFR': return '#5C2A5C';  // 暗紫
+                default: return '#5A5A5A';      // 深灰(無資料)
             }
         }
 
