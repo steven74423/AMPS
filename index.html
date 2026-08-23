@@ -227,9 +227,21 @@
         <div id="plan-panel-body">
             <!-- 動態生成航點設定 -->
         </div>
-        <div id="plan-panel-footer" style="display: flex; gap: 10px;">
-            <button id="export-btn" style="flex: 1;" title="匯出 CSV">匯出CSV</button>
-            <button id="btn-confirm-plan" style="flex: 1;">確認</button>
+        <div id="plan-panel-footer" style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px; justify-content: center;">
+                <label for="csv-coord-format" style="font-size: 0.85em; color: #ccc;">匯出座標格式</label>
+                <select id="csv-coord-format" title="匯出CSV時使用的座標表示法"
+                    style="background:#111; color:#00FFFF; border:1px solid #00FFFF; border-radius:4px; padding:4px 6px; font-size:0.85em;">
+                    <option value="dd">十進位度 (DD)</option>
+                    <option value="ddm">度分 (DDM)</option>
+                    <option value="dms">度分秒 (DMS)</option>
+                    <option value="mgrs">軍事座標 (MGRS)</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="export-btn" style="flex: 1;" title="匯出 CSV">匯出CSV</button>
+                <button id="btn-confirm-plan" style="flex: 1;">確認</button>
+            </div>
         </div>
     </div>
 
@@ -270,7 +282,7 @@
     <script src="./js/navaids_data.js"></script>
     <script src="./js/ad2_airports_data.js"></script>
     <script src="./js/config.js"></script>
-<script defer src="./js/main.js?v=11"></script>
+<script defer src="./js/main.js?v=12"></script>
 </body>
 
 </html>

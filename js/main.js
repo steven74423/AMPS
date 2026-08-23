@@ -1599,6 +1599,153 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             document.getElementById('totalFuel').textContent = tF.toFixed(1) + ' lbs';
         }
         document.getElementById('delete-btn').onclick = () => { if (waypoints.length > 0) { waypoints.pop(); map.removeLayer(markers.pop()); updatePlan(); if (isPowerLayerActive) loadPowerLines(); } };
+
+        // ===== 匯出CSV用的座標格式轉換 =====
+        // 度分(DDM): 例如 N23°30.123'　度分秒(DMS): 例如 N23°30'07.4"
+        function formatCoordDDM(value, isLat) {
+            const hemi = isLat ? (value >= 0 ? 'N' : 'S') : (value >= 0 ? 'E' : 'W');
+            const abs = Math.abs(value);
+            const deg = Math.floor(abs);
+            const min = (abs - deg) * 60;
+            return `${hemi}${deg}°${min.toFixed(3)}'`;
+        }
+        function formatCoordDMS(value, isLat) {
+            const hemi = isLat ? (value >= 0 ? 'N' : 'S') : (value >= 0 ? 'E' : 'W');
+            const abs = Math.abs(value);
+            const deg = Math.floor(abs);
+            const minFull = (abs - deg) * 60;
+            const min = Math.floor(minFull);
+            const sec = (minFull - min) * 60;
+            return `${hemi}${deg}°${min}'${sec.toFixed(1)}"`;
+        }
+
+        // MGRS(軍事座標格式)轉換：經緯度 -> UTM -> MGRS 100k方格命名，移植自公開的
+        // WGS84 UTM/MGRS 轉換演算法(proj4js/mgrs，MIT授權)，只保留正向(經緯度->MGRS)所需的部分，
+        // 包成 IIFE 避免通用命名(A/I/O/Z...)汙染到外層作用域
+        const latLngToMGRS = (function () {
+            const NUM_100K_SETS = 6;
+            const SET_ORIGIN_COLUMN_LETTERS = 'AJSAJS';
+            const SET_ORIGIN_ROW_LETTERS = 'AFAFAF';
+            const A = 65, I = 73, O = 79, V = 86, Z = 90;
+            const ECC_SQUARED = 0.00669438;
+            const SCALE_FACTOR = 0.9996;
+            const SEMI_MAJOR_AXIS = 6378137;
+            const EASTING_OFFSET = 500000;
+            const NORTHING_OFFSET = 10000000;
+            const UTM_ZONE_WIDTH = 6;
+            const HALF_UTM_ZONE_WIDTH = UTM_ZONE_WIDTH / 2;
+
+            function degToRad(deg) { return deg * (Math.PI / 180); }
+
+            function getLetterDesignator(latitude) {
+                if (latitude <= 84 && latitude >= 72) return 'X';
+                if (latitude < 72 && latitude >= -80) {
+                    const bandLetters = 'CDEFGHJKLMNPQRSTUVWX';
+                    return bandLetters[Math.floor((latitude - (-80)) / 8)];
+                }
+                return 'Z';
+            }
+
+            function LLtoUTM(lat, lon) {
+                const a = SEMI_MAJOR_AXIS;
+                const LatRad = degToRad(lat);
+                const LongRad = degToRad(lon);
+                let ZoneNumber = Math.floor((lon + 180) / 6) + 1;
+                if (lon === 180) ZoneNumber = 60;
+                if (lat >= 56 && lat < 64 && lon >= 3 && lon < 12) ZoneNumber = 32;
+                if (lat >= 72 && lat < 84) {
+                    if (lon >= 0 && lon < 9) ZoneNumber = 31;
+                    else if (lon >= 9 && lon < 21) ZoneNumber = 33;
+                    else if (lon >= 21 && lon < 33) ZoneNumber = 35;
+                    else if (lon >= 33 && lon < 42) ZoneNumber = 37;
+                }
+                const LongOrigin = (ZoneNumber - 1) * UTM_ZONE_WIDTH - 180 + HALF_UTM_ZONE_WIDTH;
+                const LongOriginRad = degToRad(LongOrigin);
+                const eccPrimeSquared = ECC_SQUARED / (1 - ECC_SQUARED);
+
+                const N = a / Math.sqrt(1 - ECC_SQUARED * Math.sin(LatRad) * Math.sin(LatRad));
+                const T = Math.tan(LatRad) * Math.tan(LatRad);
+                const C = eccPrimeSquared * Math.cos(LatRad) * Math.cos(LatRad);
+                const Ap = Math.cos(LatRad) * (LongRad - LongOriginRad);
+
+                const M = a * ((1 - ECC_SQUARED / 4 - 3 * ECC_SQUARED * ECC_SQUARED / 64 - 5 * ECC_SQUARED * ECC_SQUARED * ECC_SQUARED / 256) * LatRad
+                    - (3 * ECC_SQUARED / 8 + 3 * ECC_SQUARED * ECC_SQUARED / 32 + 45 * ECC_SQUARED * ECC_SQUARED * ECC_SQUARED / 1024) * Math.sin(2 * LatRad)
+                    + (15 * ECC_SQUARED * ECC_SQUARED / 256 + 45 * ECC_SQUARED * ECC_SQUARED * ECC_SQUARED / 1024) * Math.sin(4 * LatRad)
+                    - (35 * ECC_SQUARED * ECC_SQUARED * ECC_SQUARED / 3072) * Math.sin(6 * LatRad));
+
+                const UTMEasting = SCALE_FACTOR * N * (Ap + (1 - T + C) * Ap * Ap * Ap / 6
+                    + (5 - 18 * T + T * T + 72 * C - 58 * eccPrimeSquared) * Ap * Ap * Ap * Ap * Ap / 120) + EASTING_OFFSET;
+
+                let UTMNorthing = SCALE_FACTOR * (M + N * Math.tan(LatRad) * (Ap * Ap / 2 + (5 - T + 9 * C + 4 * C * C) * Ap * Ap * Ap * Ap / 24
+                    + (61 - 58 * T + T * T + 600 * C - 330 * eccPrimeSquared) * Ap * Ap * Ap * Ap * Ap * Ap / 720));
+                if (lat < 0) UTMNorthing += NORTHING_OFFSET;
+
+                return {
+                    northing: Math.trunc(UTMNorthing),
+                    easting: Math.trunc(UTMEasting),
+                    zoneNumber: ZoneNumber,
+                    zoneLetter: getLetterDesignator(lat)
+                };
+            }
+
+            function get100kSetForZone(i) {
+                let setParm = i % NUM_100K_SETS;
+                if (setParm === 0) setParm = NUM_100K_SETS;
+                return setParm;
+            }
+
+            function getLetter100kID(column, row, parm) {
+                const index = parm - 1;
+                const colOrigin = SET_ORIGIN_COLUMN_LETTERS.charCodeAt(index);
+                const rowOrigin = SET_ORIGIN_ROW_LETTERS.charCodeAt(index);
+
+                let colInt = colOrigin + column - 1;
+                let rowInt = rowOrigin + row;
+                let rollover = false;
+
+                if (colInt > Z) { colInt = colInt - Z + A - 1; rollover = true; }
+                if (colInt === I || (colOrigin < I && colInt > I) || ((colInt > I || colOrigin < I) && rollover)) colInt++;
+                if (colInt === O || (colOrigin < O && colInt > O) || ((colInt > O || colOrigin < O) && rollover)) {
+                    colInt++;
+                    if (colInt === I) colInt++;
+                }
+                if (colInt > Z) colInt = colInt - Z + A - 1;
+
+                if (rowInt > V) { rowInt = rowInt - V + A - 1; rollover = true; } else { rollover = false; }
+                if (((rowInt === I) || ((rowOrigin < I) && (rowInt > I))) || (((rowInt > I) || (rowOrigin < I)) && rollover)) rowInt++;
+                if (((rowInt === O) || ((rowOrigin < O) && (rowInt > O))) || (((rowInt > O) || (rowOrigin < O)) && rollover)) {
+                    rowInt++;
+                    if (rowInt === I) rowInt++;
+                }
+                if (rowInt > V) rowInt = rowInt - V + A - 1;
+
+                return String.fromCharCode(colInt) + String.fromCharCode(rowInt);
+            }
+
+            function get100kID(easting, northing, zoneNumber) {
+                const setParm = get100kSetForZone(zoneNumber);
+                const setColumn = Math.floor(easting / 100000);
+                const setRow = Math.floor(northing / 100000) % 20;
+                return getLetter100kID(setColumn, setRow, setParm);
+            }
+
+            function encode(utm, accuracy) {
+                const seasting = '00000' + utm.easting;
+                const snorthing = '00000' + utm.northing;
+                return utm.zoneNumber + utm.zoneLetter + get100kID(utm.easting, utm.northing, utm.zoneNumber)
+                    + seasting.substr(seasting.length - 5, accuracy) + snorthing.substr(snorthing.length - 5, accuracy);
+            }
+
+            // 南北極區(80°S以南、84°N以北)MGRS不適用，退回顯示十進位度並註記
+            return function (lat, lon, accuracy) {
+                accuracy = (typeof accuracy === 'number') ? accuracy : 5;
+                if (lat < -80 || lat > 84) {
+                    return `${lat.toFixed(5)},${lon.toFixed(5)}(超出MGRS適用範圍)`;
+                }
+                return encode(LLtoUTM(lat, lon), accuracy);
+            };
+        })();
+
         document.getElementById('export-btn').onclick = async () => {
             if (waypoints.length < 2) return alert("請至少設定兩個航點");
 
@@ -1607,7 +1754,13 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
             calcIndicator.style.display = 'block';
 
             const k = 120;
-            let csv = "\ufeff航點,航向,距離(NM),時間,空速(KT),油耗(lb),建議高度(ft),緯度,經度,標高(ft)\n";
+            const coordFormatEl = document.getElementById('csv-coord-format');
+            const coordFormat = coordFormatEl ? coordFormatEl.value : 'dd';
+            // MGRS 是單一格子座標字串，跟緯度/經度分成兩欄的表示法不同，欄位數量要跟著格式調整，
+            // 否則後面「總計」那一列的空欄位數量會對不齊
+            const coordHeaderCols = (coordFormat === 'mgrs') ? ['座標(MGRS)'] : ['緯度', '經度'];
+            const headerCols = ['航點', '航向', '距離(NM)', '時間', '空速(KT)', '油耗(lb)', '建議高度(ft)', ...coordHeaderCols, '標高(ft)'];
+            let csv = "\ufeff" + headerCols.join(',') + "\n";
             let tD = 0, tS = 0, tF = 0;
 
             const segmentAlts = [];
@@ -1652,10 +1805,23 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                 let defaultTitle = i === 0 ? 'SP' : `ACP ${i}`;
                 const name = markers[i] && markers[i].customName ? markers[i].customName : defaultTitle;
                 const elevText = markers[i] ? markers[i].elevText : '---';
-                csv += `${name},${c},${d},${t},${spd},${f},${sa},${pt.lat.toFixed(5)},${pt.lng.toFixed(5)},${elevText}\n`;
+
+                let coordCols;
+                if (coordFormat === 'mgrs') {
+                    coordCols = [latLngToMGRS(pt.lat, pt.lng)];
+                } else if (coordFormat === 'ddm') {
+                    coordCols = [formatCoordDDM(pt.lat, true), formatCoordDDM(pt.lng, false)];
+                } else if (coordFormat === 'dms') {
+                    coordCols = [formatCoordDMS(pt.lat, true), formatCoordDMS(pt.lng, false)];
+                } else {
+                    coordCols = [pt.lat.toFixed(5), pt.lng.toFixed(5)];
+                }
+
+                csv += [name, c, d, t, spd, f, sa, ...coordCols, elevText].join(',') + '\n';
             });
 
-            csv += `總計,,${tD.toFixed(1)},${formatTime(tS)},,${tF.toFixed(1)},,,,,\n`;
+            const coordTotalBlanks = coordHeaderCols.map(() => '');
+            csv += ['總計', '', tD.toFixed(1), formatTime(tS), '', tF.toFixed(1), '', ...coordTotalBlanks, ''].join(',') + '\n';
             calcIndicator.style.display = 'none';
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
