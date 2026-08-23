@@ -360,6 +360,15 @@ async function drawPowerLines(powerData) {
     }
 }
 
+// 在畫面上顯示一個顯眼的警告框(不用開發人員工具也看得到)，用來標示 Cesium token/地形載入問題
+function showCesiumWarning(message) {
+    const el = document.getElementById('cesium-token-warning');
+    if (el) {
+        el.textContent = '⚠️ ' + message;
+        el.style.display = 'block';
+    }
+}
+
 function initCesium() {
     if (viewer || typeof Cesium === 'undefined') return;
 
@@ -367,6 +376,7 @@ function initCesium() {
         Cesium.Ion.defaultAccessToken = APP_CONFIG.CESIUM_ION_TOKEN;
     } else {
         console.warn('未設定 CESIUM_ION_TOKEN，3D 地形資料(World Terrain)可能無法載入。');
+        showCesiumWarning('未偵測到 Cesium Ion Token（js/config.js 不存在，或裡面沒有設定 CESIUM_ION_TOKEN）。3D 地形/衛星圖資、飛彈威脅圓頂的地形遮蔽計算、高壓電纜立體線都需要這組 token 才能運作，目前只會顯示航路線與空域幾何形狀。');
     }
 
     try {
@@ -388,8 +398,16 @@ function initCesium() {
         // Remove the solid black color so the satellite map shows through
         viewer.scene.globe.baseColor = Cesium.Color.BLACK;
         viewer.scene.globe.depthTestAgainstTerrain = true; // Enables physical hiding of objects behind terrain
-        
+
         createCesiumMarker();
+
+        // Token有設定的情況下，額外確認地形資料實際上有沒有真的就緒(Token 可能無效/過期/網路連不到 cesium.com)，
+        // 這種情況跟「根本沒設定 token」屬於不同原因，訊息也要分開顯示
+        if (APP_CONFIG.CESIUM_ION_TOKEN) {
+            waitForTerrainReady(8000).catch(() => {
+                showCesiumWarning('Cesium 3D 地形資料逾時未能載入（Token 可能無效、已過期，或這台伺服器的網路連不到 cesium.com）。目前只會顯示航路線與空域幾何形狀。');
+            });
+        }
     } catch (e) {
         console.error("Cesium init error:", e);
         alert("3D模組載入失敗: " + e.message + "\n請確保網路連線正常。");
