@@ -916,7 +916,16 @@
         initAirports();
 
         // --- 機場天氣 (METAR，資料源: NOAA Aviation Weather Center，免金鑰) ---
-        const WEATHER_ICAO_CODES = ['RCTP', 'RCSS', 'RCKH', 'RCMQ', 'RCFN', 'RCNN', 'RCYU', 'RCQC', 'RCGI', 'RCFG', 'RCMT'];
+        // 涵蓋 ad2_airports.json(CAA eAIP AD 2) 裡全部 19 個機場，不只主要幾個國際機場
+        const WEATHER_ICAO_CODES = [
+            'RCTP', 'RCSS', 'RCKH', 'RCMQ', 'RCNN', 'RCKU', // 桃園/松山/高雄/台中/台南/嘉義
+            'RCFN', 'RCYU', 'RCKW', 'RCDC', // 台東豐年/花蓮/恆春/屏東南
+            'RCQC', 'RCCM', 'RCWA', // 澎湖/七美/望安
+            'RCBS', // 金門
+            'RCFG', 'RCMT', // 馬祖南竿/北竿
+            'RCGI', 'RCLY', // 綠島/蘭嶼
+            'RCSP' // 太平島
+        ];
         const weatherLayer = L.layerGroup();
         const weatherMarkers = {}; // icao -> L.Marker
         let weatherRefreshTimer = null;
