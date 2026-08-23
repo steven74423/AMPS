@@ -174,7 +174,12 @@ async function drawThreatDome(threatData, viewshedImage) {
             const degreesArray = [];
             viewshedImage.polygon.forEach(pt => { degreesArray.push(pt[0], pt[1]); });
             const targetAltM = (threatData.altFt || 500) * 0.3048;
-            const ceilingM = Math.max(targetAltM + 10000, 20000); // 天花板拉高，代表「此高度以上」持續有效
+            // 天花板用雷達本身的最大偵測距離(斜距)當上限，不是隨便設一個常數：
+            // 雷達在正上方時，能偵測到的最大高度差 = 最大偵測距離(斜距不可能超過雷達的最大射程)。
+            // 用威脅源地面高程(missileElev，2D 端算好一併帶過來) + 設定的距離(rangeNm) 換算。
+            const rangeM = (threatData.rangeNm || 0) * 1852;
+            const missileElev = (typeof viewshedImage.missileElev === 'number') ? viewshedImage.missileElev : targetAltM;
+            const ceilingM = Math.max(missileElev + rangeM, targetAltM + 100);
 
             const entity = viewer.entities.add({
                 name: '雷達可偵測範圍(立體，設定高度以上)',

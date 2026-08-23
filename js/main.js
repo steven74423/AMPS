@@ -2146,7 +2146,8 @@ const newHtml = `${b.toFixed(0)}°/${d.toFixed(1)}NM/${currentK}KT<br>${Math.flo
                     window.lastViewshedResult = {
                         dataUrl: outputCanvas.toDataURL(),
                         bounds: { south: southWest.lat, west: southWest.lng, north: northEast.lat, east: northEast.lng },
-                        polygon: viewshedPolygon
+                        polygon: viewshedPolygon,
+                        missileElev: missileElev // 飛彈(威脅源)所在地面高程(MSL公尺)，供 3D 端計算偵測範圍天花板用
                     };
                     resolve();
                 };
