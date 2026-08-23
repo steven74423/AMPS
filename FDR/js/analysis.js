@@ -164,21 +164,24 @@ async function drawThreatDome(threatData, viewshedImage) {
 
     // 最優方案：地圖端(main.js)在逐角度掃描地形時，同步記錄了每個角度「目標高度仍可被偵測到」
     // 的最遠距離，這些點連起來天生就是一個平滑、不自相交的多邊形(星形polygon)，
-    // 不需要額外做等高線追蹤。把它從地面拉伸(extrude)到設定的目標高度，
-    // 就能呈現「立體、邊緣平滑」的可偵測範圍，且跟 2D 地圖上的遮罩完全一致。
+    // 不需要額外做等高線追蹤。
+    // 拉伸範圍是「設定高度 -> 天花板」，不是「地面 -> 設定高度」：
+    // 同一個地面位置，飛得越高，越容易超過地形遮蔽角而被偵測到(targetSlope 隨高度增加而增加、
+    // maxSlope 只跟地形有關、不受高度影響)，所以「設定高度以上」保證仍在此範圍內可被偵測到；
+    // 反過來「設定高度以下」並未實際驗證過，很可能因為地形遮蔽反而看不到，畫進去會誤導。
     if (viewshedImage && Array.isArray(viewshedImage.polygon) && viewshedImage.polygon.length > 3) {
         try {
             const degreesArray = [];
             viewshedImage.polygon.forEach(pt => { degreesArray.push(pt[0], pt[1]); });
             const targetAltM = (threatData.altFt || 500) * 0.3048;
+            const ceilingM = Math.max(targetAltM + 10000, 20000); // 天花板拉高，代表「此高度以上」持續有效
 
             const entity = viewer.entities.add({
-                name: '雷達可偵測範圍(立體)',
+                name: '雷達可偵測範圍(立體，設定高度以上)',
                 polygon: {
                     hierarchy: Cesium.Cartesian3.fromDegreesArray(degreesArray),
-                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-                    extrudedHeight: targetAltM,
-                    extrudedHeightReference: Cesium.HeightReference.NONE,
+                    height: targetAltM,
+                    extrudedHeight: ceilingM,
                     material: Cesium.Color.RED.withAlpha(0.35),
                     outline: true,
                     outlineColor: Cesium.Color.RED.withAlpha(0.9),
